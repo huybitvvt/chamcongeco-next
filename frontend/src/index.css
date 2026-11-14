@@ -1,0 +1,42 @@
+﻿:root {
+  --cds-font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+  font-family: var(--cds-font-family);
+  color: var(--cds-text-primary);
+  background: var(--cds-background);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  --cds-background: #f4f7f5;
+  --cds-interactive: #236344;
+  --cds-button-primary: #236344;
+  --cds-button-primary-hover: #184e34;
+  --cds-button-primary-active: #163e2c;
+  --cds-button-tertiary: #236344;
+  --cds-button-tertiary-hover: #184e34;
+  --cds-button-tertiary-active: #163e2c;
+  --cds-link-primary: #236344;
+  --cds-link-primary-hover: #163e2c;
+  --cds-focus: #236344;
+  --cds-border-interactive: #236344;
+  --cds-background-selected: #e8f3ec;
+  --cds-background-selected-hover: #d5e9dc;
+  --ink: var(--cds-text-primary);
+  --muted: var(--cds-text-secondary);
+  --paper: var(--cds-layer-01);
+  --line: var(--cds-border-subtle-01);
+  --accent: var(--cds-button-primary);
+  --accent-hover: var(--cds-button-primary-hover);
+  --accent-soft: #e8f3ec;
+  --red: var(--cds-support-error);
+}
+
+* { box-sizing: border-box; }
+html, body { min-width: 320px; min-height: 100%; }
+body { margin: 0; background: var(--cds-background); font-family: var(--cds-font-family); }
+button, input, select, textarea { font: inherit; }
+button, label[for] { -webkit-tap-highlight-color: transparent; }
+button:focus-visible, input:focus-visible, a:focus-visible, [tabindex]:focus-visible {
+  outline: 2px solid var(--cds-focus);
+  outline-offset: 2px;
+}
+#root { min-height: 100vh; }

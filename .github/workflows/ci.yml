@@ -1,0 +1,53 @@
+name: Verify
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: '0.13.8'
+          enable-cache: true
+      - run: uv sync --project backend --frozen
+      - run: uv run --project backend ruff check backend/src/backend/runtime backend/scripts/download_models.py backend/scripts/import_csv.py backend/scripts/benchmark_runtime.py backend/tests/test_runtime.py backend/tests/test_import.py backend/tests/test_transport.py
+      - run: uv run --project backend pytest backend/tests -q
+      - name: Real ONNX and HTTP/storage smoke with public developer samples
+        run: |
+          uv run --project backend python backend/scripts/download_models.py
+          curl --fail --location --retry 2 -o /tmp/live.jpg https://raw.githubusercontent.com/minivision-ai/Silent-Face-Anti-Spoofing/master/images/sample/image_T1.jpg
+          curl --fail --location --retry 2 -o /tmp/spoof.jpg https://raw.githubusercontent.com/minivision-ai/Silent-Face-Anti-Spoofing/master/images/sample/image_F1.jpg
+          uv run --project backend python backend/scripts/benchmark_runtime.py --image /tmp/live.jpg --spoof /tmp/spoof.jpg --runs 3
+  frontend-and-sql:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.0'
+      - run: bun install --frozen-lockfile
+        working-directory: frontend
+      - run: bun run lint && bun run build
+        working-directory: frontend
+      - run: bunx playwright install --with-deps chromium
+        working-directory: frontend
+      - name: Browser flows with fake camera and API
+        working-directory: frontend
+        run: |
+          bun run dev --host 127.0.0.1 --strictPort > /tmp/vite.log 2>&1 &
+          VITE_PID=$!
+          trap 'kill "$VITE_PID"' EXIT
+          for i in $(seq 1 30); do curl --fail --silent http://127.0.0.1:5173 > /dev/null && break; sleep 1; done
+          node --test --test-concurrency=1 tests/*.mjs
+      - run: bun install --frozen-lockfile && bun run test:sql
+        working-directory: tools
+  containers:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -f backend/Dockerfile -t attendly-api:test .
+      - run: docker build -f frontend/Dockerfile -t attendly-web:test .
+      - name: Nginx configuration
+        run: docker run --rm --add-host api:127.0.0.1 attendly-web:test nginx -t

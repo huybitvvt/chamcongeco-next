@@ -70,7 +70,15 @@ class SupabasePhotos:
     def initialize(self):
         try:
             response = self.client.get(f"/storage/v1/bucket/{BUCKET}")
-            if response.status_code == 404:
+            missing = response.status_code == 404
+            if response.status_code == 400:
+                try:
+                    error = response.json()
+                except ValueError:
+                    error = {}
+                # Supabase Storage can wrap NoSuchBucket in HTTP 400.
+                missing = isinstance(error, dict) and error.get("code") == "NoSuchBucket"
+            if missing:
                 response = self.client.post(
                     "/storage/v1/bucket",
                     json=dict(

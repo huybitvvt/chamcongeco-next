@@ -110,3 +110,33 @@ class TransportTests(unittest.TestCase):
 
         SupabasePhotos(self.client(handler)).initialize()
         self.assertTrue(created)
+
+    def test_missing_bucket_wrapped_in_http_400_is_created_private(self):
+        created = False
+
+        def handler(request):
+            nonlocal created
+            if request.method == "POST":
+                self.assertIn(b'"public":false', request.content)
+                self.assertIn(b'"allowed_mime_types":["image/jpeg"]', request.content)
+                created = True
+                return httpx.Response(200, json={"id": BUCKET})
+            if created:
+                return httpx.Response(200, json={"id": BUCKET, "public": False})
+            return httpx.Response(400, json={"statusCode": "404", "error": "Bucket not found", "code": "NoSuchBucket"})
+
+        SupabasePhotos(self.client(handler)).initialize()
+        self.assertTrue(created)
+
+    def test_other_http_400_bucket_errors_do_not_create_bucket(self):
+        for body in [{"code": "AccessDenied"}, {"code": "InvalidRequest"}, [], "invalid JSON"]:
+            with self.subTest(body=body):
+                methods = []
+
+                def handler(request, body=body, methods=methods):
+                    methods.append(request.method)
+                    return httpx.Response(400, text=body) if isinstance(body, str) else httpx.Response(400, json=body)
+
+                with self.assertRaises(AppError):
+                    SupabasePhotos(self.client(handler)).initialize()
+                self.assertEqual(methods, ["GET"])

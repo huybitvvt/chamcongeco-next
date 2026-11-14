@@ -51,3 +51,25 @@ jobs:
       - run: docker build -f frontend/Dockerfile -t attendly-web:test .
       - name: Nginx configuration
         run: docker run --rm --add-host api:127.0.0.1 attendly-web:test nginx -t
+      - name: Production Compose, private volumes, auth and real punch through Nginx
+        shell: bash
+        run: |
+          export FACE_ADMIN_API_KEY="$(openssl rand -hex 32)"
+          export FACE_KIOSK_API_KEY="$(openssl rand -hex 32)"
+          echo "::add-mask::$FACE_ADMIN_API_KEY"
+          echo "::add-mask::$FACE_KIOSK_API_KEY"
+          export WEB_PORT=18080
+          trap 'docker compose logs --tail 50; docker compose down -v' EXIT
+          docker compose build
+          docker compose run --rm --no-deps api python scripts/download_models.py
+          docker compose up -d --wait --wait-timeout 90
+          curl --fail --silent http://127.0.0.1:18080/ > /tmp/attendly-index.html
+          test "$(curl --silent -o /dev/null -w '%{http_code}' http://127.0.0.1:18080/api/employees)" = 401
+          curl --fail --silent -H "Authorization: Bearer $FACE_KIOSK_API_KEY" http://127.0.0.1:18080/api/session
+          curl --fail --location --silent -o /tmp/container-face.jpg https://raw.githubusercontent.com/minivision-ai/Silent-Face-Anti-Spoofing/master/images/sample/image_T1.jpg
+          curl --fail --silent -H "Authorization: Bearer $FACE_ADMIN_API_KEY" -F 'name=Synthetic CI Container' -F 'consent=true' -F 'image=@/tmp/container-face.jpg;type=image/jpeg' http://127.0.0.1:18080/api/employees > /tmp/container-enrollment.json
+          REQUEST_ID="$(cat /proc/sys/kernel/random/uuid)"
+          curl --fail --silent -H "Authorization: Bearer $FACE_KIOSK_API_KEY" -F "request_id=$REQUEST_ID" -F 'image=@/tmp/container-face.jpg;type=image/jpeg' http://127.0.0.1:18080/api/recognize > /tmp/container-punch.json
+          curl --fail --silent -H "Authorization: Bearer $FACE_KIOSK_API_KEY" -F "request_id=$REQUEST_ID" -F 'image=@/tmp/container-face.jpg;type=image/jpeg' http://127.0.0.1:18080/api/recognize > /tmp/container-retry.json
+          python3 -c "import json; first=json.load(open('/tmp/container-punch.json')); retry=json.load(open('/tmp/container-retry.json')); assert first['status']=='confirmed' and len(first['attendance_updated'])==1; assert retry['attendance']==first['attendance'] and retry['replayed']; print('Production proxy/auth/ONNX/storage/receipt passed')"
+          docker compose exec -T api python -c "from pathlib import Path; assert len(list(Path('/data/photos').rglob('*.jpg')))==1; print('Evidence persisted once in private volume')"

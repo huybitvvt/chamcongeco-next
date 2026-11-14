@@ -19,6 +19,7 @@ try {
   await page.goto(process.env.FRONTEND_URL || 'http://127.0.0.1:5173')
   await page.getByRole('button', { name: 'Đăng ký nhân viên', exact: true }).click()
   await page.getByLabel('Họ và tên', { exact: true }).fill('Synthetic Real Pipeline')
+  await page.getByRole('button', { name: 'Tải ảnh lên', exact: true }).click()
   await page.locator('input[type=file]').setInputFiles(image)
   await page.getByRole('checkbox').focus()
   await page.keyboard.press('Space')

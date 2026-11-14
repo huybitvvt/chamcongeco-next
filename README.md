@@ -10,6 +10,7 @@ Bản phát triển tiếp từ [quantrinhansu123/chamcongeco](https://github.co
 
 - Giải mã ảnh/phát hiện mặt một lần; chạy hoàn toàn bằng ONNX Runtime CPU, không cần PyTorch/DeepFace ở luồng mặc định. Kiểm tra checksum và nạp model trước khi API sẵn sàng.
 - Gallery bất biến trong RAM, 1–5 vector/người, có mã phiên bản model. Hồ sơ dlib cũ được giữ riêng; cần cập nhật ảnh để dùng engine mới.
+- Đăng ký tự thu **5 góc qua camera** bằng MediaPipe chạy trong Web Worker: hướng dẫn pose, đợi ổn định, chọn ảnh rõ, xem lại và chụp lại từng góc. Có đường tải 1–5 ảnh khi camera không khả dụng.
 - SQLite WAL mặc định, hoặc Supabase qua kết nối HTTP dùng lại và RPC nguyên tử. CSV cũ chỉ là nguồn nhập, không còn là kho ghi đồng thời.
 - Mỗi lượt có UUID và biên nhận lưu bền vững. Retry trả lại thời gian đã lưu; bấm lặp trong 30 giây không biến giờ vào thành giờ ra. Ảnh riêng tư được lưu trước khi xác nhận công.
 - Camera chỉ có một yêu cầu đang xử lý, tự điều chỉnh nhịp gửi, có timeout/backoff và khôi phục biên nhận sau mất mạng/tải lại trang. Dừng camera khi chuyển màn hình hoặc đưa tab xuống nền.
@@ -46,6 +47,8 @@ bun run dev --host 127.0.0.1
 
 Mở **http://127.0.0.1:5173**. Vite chuyển `/api` đến backend; không đặt khóa bí mật trong `VITE_*`. Giao diện cần cả frontend và backend đang chạy.
 
+Lệnh dev/build tự chuẩn bị model hướng dẫn camera và WASM đã pin/checksum, phục vụ từ cùng địa chỉ ứng dụng. Lần đầu cần Internet để tải tài nguyên; những lần sau dùng cache trên đĩa. Chỉ nạp vào trình duyệt khi bấm bắt đầu thu, không gọi API AI bên ngoài. Để chuẩn bị trước: `cd frontend` rồi `bun run prepare:vision`. Chi tiết tại [tự thu 5 góc](docs/AUTO_ENROLLMENT.md).
+
 Mặc định development trên localhost không yêu cầu mã truy cập. Để bật xác thực, chép `backend/.env.example` thành `backend/.env`, đặt hai mã khác nhau và đặt `APP_ENV=production`. Tệp này được backend tự đọc; biến môi trường hệ thống được ưu tiên. Sinh mã bằng:
 
 ```bash
@@ -56,7 +59,7 @@ Chạy hai lần để có mã quản trị và mã trạm. Nhập mã trên mà
 
 ## Sử dụng
 
-1. Quản trị viên đăng ký tên và 1–5 ảnh cùng người; nên có 3 góc rõ mặt. Xác nhận nhân viên đã đồng ý trước khi lưu.
+1. Quản trị viên điền tên, xác nhận đồng ý rồi bấm **Bắt đầu thu 5 góc**. Nhân viên nhìn thẳng, quay trái/phải, ngẩng/cúi nhẹ theo chỉ dẫn; hệ thống tự chọn ảnh và dừng camera. Xem lại rồi bấm **Lưu nhân viên**. Có thể chụp lại riêng góc lỗi hoặc chọn **Tải ảnh lên** để dùng 1–5 ảnh có sẵn.
 2. Nhân viên bấm **Chấm công**, nhìn thẳng camera. Chỉ một người trong khung hình. Lượt đầu ngày ghi giờ vào; lượt tiếp theo sau khoảng chống bấm lặp ghi giờ ra.
 3. Chỉ biên nhận `confirmed` mới hiển thị **Đã lưu**. Khi mất mạng, bấm lại sẽ kiểm tra lượt đang chờ trước khi tạo lượt mới.
 4. Hồ sơ cũ có nhãn **Cần cập nhật khuôn mặt**: quản trị viên chọn **Cập nhật ảnh** trên đúng nhân viên. Mã nhân viên và lịch sử công được giữ nguyên.
@@ -78,10 +81,12 @@ uv run --project backend pytest backend/tests -q
 uv run --project backend ruff check backend/src/backend/runtime backend/scripts/download_models.py backend/scripts/import_csv.py backend/scripts/benchmark_runtime.py
 cd frontend
 bun run lint
+bun run test:unit
 bun run build
 bunx playwright install chromium
 # Mở bun run dev ở terminal khác trước khi chạy:
 node --test --test-concurrency=1 tests/*.mjs
+node scripts/smoke-enrollment-worker.mjs
 cd ../tools
 bun install --frozen-lockfile
 bun run test:sql

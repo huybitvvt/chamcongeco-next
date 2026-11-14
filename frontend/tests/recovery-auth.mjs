@@ -83,6 +83,7 @@ test('admin replaces legacy face templates through PUT with explicit consent', a
     await page.getByRole('button', { name: `Cập nhật khuôn mặt ${employee.name}`, exact: true }).click()
     assert.equal(await page.getByLabel('Họ và tên', { exact: true }).inputValue(), employee.name)
     assert.equal(await page.getByLabel('Họ và tên', { exact: true }).getAttribute('readonly'), '')
+    await page.getByRole('button', { name: 'Tải ảnh lên', exact: true }).click()
     await page.locator('input[type=file]').setInputFiles({ name: 'synthetic.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aS1sAAAAASUVORK5CYII=', 'base64') })
     await page.getByRole('checkbox').focus()
     await page.keyboard.press('Space')

@@ -29,7 +29,7 @@ jobs:
           bun-version: '1.4.0'
       - run: bun install --frozen-lockfile
         working-directory: frontend
-      - run: bun run lint && bun run build
+      - run: bun run lint && bun run test:unit && bun run build
         working-directory: frontend
       - run: bunx playwright install --with-deps chromium
         working-directory: frontend
@@ -41,6 +41,7 @@ jobs:
           trap 'kill "$VITE_PID"' EXIT
           for i in $(seq 1 30); do curl --fail --silent http://127.0.0.1:5173 > /dev/null && break; sleep 1; done
           node --test --test-concurrency=1 tests/*.mjs
+          node scripts/smoke-enrollment-worker.mjs
       - run: bun install --frozen-lockfile && bun run test:sql
         working-directory: tools
   containers:
@@ -51,6 +52,11 @@ jobs:
       - run: docker build -f frontend/Dockerfile -t attendly-web:test .
       - name: Nginx configuration
         run: docker run --rm --add-host api:127.0.0.1 attendly-web:test nginx -t
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.0'
+      - run: bun install --frozen-lockfile && bunx playwright install --with-deps chromium
+        working-directory: frontend
       - name: Production Compose, private volumes, auth and real punch through Nginx
         shell: bash
         run: |
@@ -59,7 +65,7 @@ jobs:
           echo "::add-mask::$FACE_ADMIN_API_KEY"
           echo "::add-mask::$FACE_KIOSK_API_KEY"
           export WEB_PORT=18080
-          trap 'docker compose logs --tail 50; docker compose down -v' EXIT
+          trap 'cd "$GITHUB_WORKSPACE"; docker compose logs --tail 50; docker compose down -v' EXIT
           docker compose build
           docker compose run --rm --no-deps api python scripts/download_models.py
           docker compose up -d --wait --wait-timeout 90
@@ -73,3 +79,7 @@ jobs:
           curl --fail --silent -H "Authorization: Bearer $FACE_KIOSK_API_KEY" -F "request_id=$REQUEST_ID" -F 'image=@/tmp/container-face.jpg;type=image/jpeg' http://127.0.0.1:18080/api/recognize > /tmp/container-retry.json
           python3 -c "import json; first=json.load(open('/tmp/container-punch.json')); retry=json.load(open('/tmp/container-retry.json')); assert first['status']=='confirmed' and len(first['attendance_updated'])==1; assert retry['attendance']==first['attendance'] and retry['replayed']; print('Production proxy/auth/ONNX/storage/receipt passed')"
           docker compose exec -T api python -c "from pathlib import Path; assert len(list(Path('/data/photos').rglob('*.jpg')))==1; print('Evidence persisted once in private volume')"
+          export FRONTEND_URL=http://127.0.0.1:18080
+          export SMOKE_ADMIN_API_KEY="$FACE_ADMIN_API_KEY"
+          cd frontend
+          node scripts/smoke-enrollment-worker.mjs

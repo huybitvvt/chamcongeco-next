@@ -4,11 +4,13 @@ Ngày 14/11/2026. Máy phát triển Windows, Intel Core i3-1215U, RAM 8 GB, ONN
 
 ## Phần mềm
 
-- **67 test Python đạt**, gồm bộ regression cũ và runtime mới: vào/ra, giữ giờ đầu, retry sau restart, concurrent intents, lỗi ảnh/DB, pending hết hạn, timezone, consent, quyền kiosk/admin, profile model và CSV import. 2 cảnh báo thư viện: legacy `pkg_resources` và Starlette TestClient/httpx.
+- **70 test Python đạt**, gồm bộ regression cũ và runtime mới: vào/ra, giữ giờ đầu, retry sau restart, concurrent intents, lỗi ảnh/DB, pending hết hạn, timezone, consent, quyền kiosk/admin, profile model, CSV import và bộ 5 góc/lỗi theo ảnh. 2 cảnh báo thư viện: legacy `pkg_resources` và Starlette TestClient/httpx.
 - **27 kiểm tra PostgreSQL đạt** qua PGlite: migration chạy lại được, reserve/complete, object ảnh bắt buộc, idempotency, cooldown, giữ model cũ và quyền anon. PGlite dùng một kết nối; không chứng minh khóa đồng thời giữa nhiều session Supabase thật.
-- **6 test trình duyệt đạt** trên Edge với fake camera/API: UI desktop/mobile 1440–320 px, bàn phím, consent, chụp nhiều ảnh, dừng camera, vào/ra, không tự checkout, phân quyền, cập nhật mặt cũ, mất phản hồi và khôi phục sau reload.
+- **8 test trình duyệt đạt** trên Edge với fake camera/API/pose tracker: UI desktop/mobile 1440–320 px, bàn phím, consent, tự thu 5 góc, chụp lại ảnh lỗi, dừng camera/worker, hủy khi đang tải, từ chối quyền camera, vào/ra, phân quyền, cập nhật mặt cũ và khôi phục sau mất phản hồi.
+- **9 unit test frontend đạt**: đọc ma trận pose, phân biệt 5 hướng, thời gian giữ ổn định, chọn ảnh tốt nhất, reset khi rung/mất mặt/nhiều mặt và chất lượng ảnh. Không dùng timer để thu đủ góc từ các frame chính diện giống nhau.
+- Worker **MediaPipe/SDK/WASM thật** chạy qua UI trên Edge: nạp tài nguyên cùng origin khi bấm bắt đầu, từ chối fake camera không có mặt, dừng và giải phóng camera. Thử thêm video giả từ ảnh public trả 1 mặt, góc hữu hạn và chất lượng hợp lệ. Không phải thử đủ 5 góc bằng webcam vật lý. Script: `frontend/scripts/smoke-enrollment-worker.mjs`.
 - Một lượt nối **UI thật → API thật → ONNX/PAD thật → SQLite/ảnh thật → biên nhận** cũng đạt, dùng danh tính tổng hợp và video camera giả từ ảnh developer public trong DB riêng. Không mock API/model, không đụng dữ liệu nhân viên; vẫn không là kiểm chứng camera vật lý hoặc liveness ngoài thực tế. Script tùy chọn: `frontend/scripts/smoke-real.mjs`.
-- Cài lại bản xuất sạch không có dlib/Torch/DeepFace: **31 test mặc định đạt**. 36 test prototype bổ sung chỉ chạy khi cài extra `legacy`.
+- Bộ mặc định không cần dlib/Torch/DeepFace gồm **34 test**; 36 test prototype bổ sung chỉ chạy khi cài extra `legacy`. Trước nâng cấp auto-capture, cài mới đã đạt 31 test mặc định; CI kiểm tra lại bộ mới.
 - Frontend TypeScript/build và lint đạt; Carbon hiện phát cảnh báo deprecation Sass khi build. Không có lỗi build từ các cảnh báo đó.
 - Native SCRFD decode/landmark và embedding đối chiếu InsightFace SDK 2.1 trên 3 ảnh public: bbox/landmark lệch <0.001 px, cosine embedding >0.999999, crop căn chỉnh lệch pixel tối đa 1. Hai context crop PAD đối chiếu nguồn MiniVision/DeepFace trùng pixel trên 6 ảnh.
 

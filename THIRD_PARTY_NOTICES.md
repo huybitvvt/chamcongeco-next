@@ -12,6 +12,8 @@ Model files are not included in Git. The preparation script identifies source UR
 
 ## UI and dependencies
 
+The optional browser enrollment guide uses Google's [MediaPipe Tasks Face Landmarker](https://github.com/google-ai-edge/mediapipe), Copyright The MediaPipe Authors, Apache-2.0. SDK 1.2.3 is pinned in the npm lockfile. Its WASM loader/binary and the official Face Landmarker task are prepared with SHA-256 verification by `frontend/scripts/prepare-vision.mjs`, hosted by the application, and not checked into Git. Application pose selection, quality checks and capture lifecycle are implemented separately; Face Landmarker does not provide identity verification or presentation-attack certification.
+
 IBM Carbon React/styles, React, Vite, OpenCV, ONNX Runtime, FastAPI, HTTPX, NumPy, Pillow, uv, Bun and PGlite remain separate dependencies under their respective upstream terms. Lockfiles pin the tested dependency graph. Container base images are fetched at build time and should be updated with dependency/security maintenance.
 
 The locally served Inter font includes its notice at `frontend/public/fonts/Inter-LICENSE.txt`. Original application branding/static assets are retained from the base repository where used.

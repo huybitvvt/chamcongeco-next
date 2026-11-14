@@ -35,7 +35,7 @@ BACKEND_FILES = {
 }
 SCRIPTS = {"download_models.py", "import_csv.py", "benchmark_runtime.py"}
 SQL = {"schema.sql", "003_runtime.sql", "sequence_sync.sql"}
-DOCS = {"ARCHITECTURE.md", "MIGRATION.md", "OPERATIONS.md", "VERIFICATION.md"}
+DOCS = {"ARCHITECTURE.md", "MIGRATION.md", "OPERATIONS.md", "VERIFICATION.md", "AUTO_ENROLLMENT.md"}
 TOOLS = {"package.json", "bun.lock", "test-supabase.mjs", "export_public.py"}
 SECRET = re.compile(
     r"(?:sb_secret_[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}|(?<![A-Za-z0-9])sk-[A-Za-z0-9_-]{24,}|AKIA[A-Z0-9]{16}|-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----|eyJ[A-Za-z0-9_-]{30,}\.[A-Za-z0-9_-]{30,}\.[A-Za-z0-9_-]{20,})"
@@ -52,7 +52,7 @@ def allowed(path):
         return False
     if (
         path.suffix
-        in {".onnx", ".pt", ".pth", ".pkl", ".sqlite3", ".csv", ".log", ".zip"}
+        in {".onnx", ".task", ".wasm", ".pt", ".pth", ".pkl", ".sqlite3", ".csv", ".log", ".zip"}
         or path.name == ".DS_Store"
     ):
         return False
@@ -71,7 +71,7 @@ def allowed(path):
             and path.name in SQL
         )
     if parts[0] == "frontend":
-        return parts[1:3] != ("src", "assets")
+        return parts[1:3] != ("src", "assets") and parts[1:3] != ('public', 'vision')
     if parts[0] == "docs":
         return (
             len(parts) == 2

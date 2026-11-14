@@ -35,7 +35,16 @@ class AttendanceApplication:
         day = day or self.clock().date().isoformat()
         return self.gallery.employees_with_attendance(self.store.list_attendance(day))
 
-    def enroll(self, name: str, images: list[tuple[str, bytes]], consent: bool, employee_id=None):
+    def enroll(
+        self,
+        name: str,
+        images: list[tuple[str, bytes]],
+        consent: bool,
+        employee_id=None,
+        *,
+        capture_mode="upload",
+        pose_labels=None,
+    ):
         if not consent:
             raise AppError("consent_required", "Cần xác nhận nhân viên đã đồng ý trước khi lưu khuôn mặt.")
         name = " ".join(name.split())
@@ -43,21 +52,28 @@ class AttendanceApplication:
             raise AppError("invalid_name", "Họ tên phải có từ 1 đến 120 ký tự.")
         if not 1 <= len(images) <= 5:
             raise AppError("image_count", "Chọn từ 1 đến 5 ảnh rõ mặt.")
+        if capture_mode == "guided" and (len(images) != 5 or pose_labels != ["front", "left", "right", "up", "down"]):
+            raise AppError("pose_set", "Cần đủ 5 góc: thẳng, trái, phải, ngẩng và cúi.")
         vectors = []
-        for _, raw in images:
-            analysis = self.vision.analyze(raw, liveness=False)
+        for index, (_, raw) in enumerate(images):
+            try:
+                analysis = self.vision.analyze(raw, liveness=False)
+            except AppError as error:
+                raise AppError(error.code, error.message, error.status, image_index=index) from error
             if len(analysis.faces) != 1:
-                raise AppError("face_count", "Mỗi ảnh đăng ký phải có đúng một khuôn mặt.")
+                raise AppError("face_count", "Mỗi ảnh đăng ký phải có đúng một khuôn mặt.", image_index=index)
             vectors.append(np.asarray(analysis.faces[0].embedding))
         legacy = self.vision.model_id == LEGACY_MODEL_ID
-        for vector in vectors[1:]:
+        for index, vector in enumerate(vectors[1:], start=1):
             consistent = (
                 np.linalg.norm(vector - vectors[0]) <= 0.45
                 if legacy
                 else float(vector @ vectors[0]) >= self.settings.cosine_threshold
             )
             if not consistent:
-                raise AppError("different_faces", "Các ảnh chưa khớp cùng một người. Hãy chụp lại rõ mặt.")
+                raise AppError(
+                    "different_faces", "Các ảnh chưa khớp cùng một người. Hãy chụp lại rõ mặt.", image_index=index
+                )
         with self._enrollment_lock:
             # Include enrollments completed on other workers before duplicate checks.
             self.gallery.refresh()

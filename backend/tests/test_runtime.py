@@ -96,6 +96,72 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(self.punch().json()["attendance"][0], checkout)
         self.assertEqual(len(list(self.settings.data_dir.rglob("*.jpg"))), 2)
 
+    def test_guided_enrollment_requires_all_named_poses_and_consent(self):
+        import json
+
+        poses = ["front", "left", "right", "up", "down"]
+
+        def submit(count=5, labels=poses, consent="true"):
+            return self.client.post(
+                "/api/employees",
+                data={
+                    "name": "Guided Synthetic",
+                    "consent": consent,
+                    "capture_mode": "guided",
+                    "pose_labels": json.dumps(labels),
+                },
+                files=[("image", (f"{i}.jpg", b"fake", "image/jpeg")) for i in range(count)],
+            )
+
+        self.assertEqual(submit(4).json()["code"], "pose_set")
+        self.assertEqual(submit(labels=["front"] * 5).json()["code"], "pose_set")
+        self.assertEqual(submit(consent="false").json()["code"], "consent_required")
+        self.assertEqual(self.client.app.state.core.store.list_employees(), [])
+        self.assertEqual(submit().json()["template_count"], 5)
+
+    def test_guided_error_identifies_bad_image_and_never_writes_partial_profile(self):
+        import json
+
+        original = self.vision.analyze
+        calls = []
+
+        def analyze(raw, **kwargs):
+            calls.append(raw)
+            if len(calls) == 3:
+                raise AppError("face_blurry", "Ảnh đang mờ.")
+            return original(raw, **kwargs)
+
+        with patch.object(self.vision, "analyze", side_effect=analyze):
+            result = self.client.post(
+                "/api/employees",
+                data={
+                    "name": "Guided Synthetic",
+                    "consent": "true",
+                    "capture_mode": "guided",
+                    "pose_labels": json.dumps(["front", "left", "right", "up", "down"]),
+                },
+                files=[("image", (f"{i}.jpg", b"fake", "image/jpeg")) for i in range(5)],
+            )
+        self.assertEqual(result.json()["image_index"], 2)
+        self.assertEqual(result.json()["code"], "face_blurry")
+        self.assertEqual(self.client.app.state.core.store.list_employees(), [])
+
+    def test_enrollment_identity_switch_returns_index_and_no_partial_profile(self):
+        original = self.vision.analyze
+        calls = []
+
+        def analyze(raw, **kwargs):
+            calls.append(raw)
+            if len(calls) == 2:
+                self.vision.vector = np.eye(1, 512, k=1, dtype=np.float32).ravel()
+            return original(raw, **kwargs)
+
+        with patch.object(self.vision, "analyze", side_effect=analyze):
+            result = self.enroll(count=3)
+        self.assertEqual(result.json()["code"], "different_faces")
+        self.assertEqual(result.json()["image_index"], 1)
+        self.assertEqual(self.client.app.state.core.store.list_employees(), [])
+
     def test_duplicate_click_does_not_immediately_check_out(self):
         self.enroll()
         self.punch()

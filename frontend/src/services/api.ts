@@ -8,16 +8,18 @@ export const setAccessKey = (key: string) => key ? sessionStorage.setItem(KEY, k
 export class ApiError extends Error {
   status: number
   code: string
-  constructor(message: string, status: number, code = '') {
+  imageIndex: number | null
+  constructor(message: string, status: number, code = '', imageIndex: number | null = null) {
     super(message)
     this.name = 'ApiError'
     this.status = status
     this.code = code
+    this.imageIndex = imageIndex
   }
 }
 
-async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const timeout = AbortSignal.timeout(15_000)
+async function request<T>(path: string, options: RequestInit = {}, timeoutMs = 15_000): Promise<T> {
+  const timeout = AbortSignal.timeout(timeoutMs)
   const signal = options.signal ? AbortSignal.any([options.signal, timeout]) : timeout
   const headers = new Headers(options.headers)
   const key = getAccessKey()
@@ -34,13 +36,15 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   if (!response.ok) {
     let message = `Yêu cầu thất bại (mã ${response.status}).`
     let code = ''
+    let imageIndex: number | null = null
     try {
-      const body = await response.json() as { detail?: unknown; code?: string }
+      const body = await response.json() as { detail?: unknown; code?: string; image_index?: number }
       if (typeof body.detail === 'string') message = body.detail
       code = body.code ?? ''
+      if (Number.isInteger(body.image_index) && body.image_index! >= 0 && body.image_index! < 5) imageIndex = body.image_index!
     } catch { /* Keep the HTTP fallback for non-JSON proxy errors. */ }
     if (response.status === 401 && path !== '/api/session') window.dispatchEvent(new Event('attendly:authentication-required'))
-    throw new ApiError(message, response.status, code)
+    throw new ApiError(message, response.status, code, imageIndex)
   }
   return response.json() as Promise<T>
 }
@@ -49,14 +53,16 @@ export const getSession = (signal?: AbortSignal) => request<Session>('/api/sessi
 export const getEmployees = (signal?: AbortSignal) => request<EmployeeAttendance[]>('/api/employees', { signal })
 export const getRequestStatus = (id: string, signal?: AbortSignal) => request<RequestStatus>(`/api/recognition-requests/${encodeURIComponent(id)}`, { signal })
 
-export function enrollEmployee(name: string, images: File[], employeeId?: string, signal?: AbortSignal): Promise<EmployeeCreated> {
+export function enrollEmployee(name: string, images: File[], employeeId?: string, signal?: AbortSignal, poses?: readonly string[]): Promise<EmployeeCreated> {
   const body = new FormData()
   body.append('name', name)
   body.append('consent', 'true')
+  body.append('capture_mode', poses ? 'guided' : 'upload')
+  if (poses) body.append('pose_labels', JSON.stringify(poses))
   images.forEach(image => body.append('image', image))
   return request<EmployeeCreated>(employeeId ? `/api/employees/${encodeURIComponent(employeeId)}/face` : '/api/employees', {
     method: employeeId ? 'PUT' : 'POST', body, signal,
-  })
+  }, 60_000)
 }
 
 export function recognizeFrame(image: Blob, requestId: string, signal?: AbortSignal): Promise<RecognitionResponse> {

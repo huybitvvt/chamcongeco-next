@@ -2,6 +2,7 @@ import asyncio
 from contextlib import asynccontextmanager, suppress
 from datetime import date as Date
 import hmac
+import json
 import logging
 from pathlib import Path
 from time import perf_counter
@@ -114,7 +115,11 @@ def create_app(settings: Settings | None = None, *, vision=None, store=None, pho
     @application.exception_handler(AppError)
     async def application_error(request, error: AppError):
         return JSONResponse(
-            {"code": error.code, "detail": error.message},
+            {
+                "code": error.code,
+                "detail": error.message,
+                **({"image_index": error.image_index} if error.image_index is not None else {}),
+            },
             status_code=error.status,
             headers={"Retry-After": "1"} if error.status in {429, 503} else None,
         )
@@ -171,18 +176,18 @@ def create_app(settings: Settings | None = None, *, vision=None, store=None, pho
             if not 1 <= len(files) <= 5:
                 raise AppError("image_count", "Chọn từ 1 đến 5 ảnh.")
             result = []
-            for file in files:
+            for index, file in enumerate(files):
                 filename = Path((file.filename or "").replace("\\", "/")).name[:160]
                 if Path(filename).suffix.lower() not in {".jpg", ".jpeg", ".png"} or file.content_type not in {
                     "image/jpeg",
                     "image/png",
                 }:
-                    raise AppError("image_type", "Chỉ nhận ảnh JPG hoặc PNG.", 415)
+                    raise AppError("image_type", "Chỉ nhận ảnh JPG hoặc PNG.", 415, image_index=index)
                 raw = file.file.read(settings.max_upload_bytes + 1)
                 if len(raw) > settings.max_upload_bytes:
-                    raise AppError("upload_too_large", "Mỗi ảnh được phép tối đa 5 MB.", 413)
+                    raise AppError("upload_too_large", "Mỗi ảnh được phép tối đa 5 MB.", 413, image_index=index)
                 if not raw:
-                    raise AppError("empty_image", "Tệp ảnh rỗng.")
+                    raise AppError("empty_image", "Tệp ảnh rỗng.", image_index=index)
                 result.append((filename, raw))
             return result
         finally:
@@ -192,6 +197,20 @@ def create_app(settings: Settings | None = None, *, vision=None, store=None, pho
     @application.get("/healthz")
     def health():
         return {"status": "ok"}
+
+    def poses(raw: str):
+        try:
+            if len(raw) > 256:
+                raise ValueError("too many poses")
+            value = json.loads(raw) if raw else None
+            if (
+                value is not None
+                and (not isinstance(value, list) or len(value) > 5 or any(not isinstance(item, str) for item in value))
+            ):
+                raise ValueError("invalid poses")
+            return value
+        except (ValueError, TypeError) as error:
+            raise AppError("pose_set", "Danh sách góc khuôn mặt không hợp lệ.") from error
 
     @application.get("/readyz")
     def ready(current: Annotated[AttendanceApplication, Depends(core)]):
@@ -219,8 +238,12 @@ def create_app(settings: Settings | None = None, *, vision=None, store=None, pho
         name: Annotated[str, Form()],
         image: Annotated[list[UploadFile], File()],
         consent: Annotated[bool, Form()] = False,
+        capture_mode: Annotated[Literal["upload", "guided"], Form()] = "upload",
+        pose_labels: Annotated[str, Form()] = "",
     ):
-        return current.enroll(name, read_images(image), consent)
+        return current.enroll(
+            name, read_images(image), consent, capture_mode=capture_mode, pose_labels=poses(pose_labels)
+        )
 
     @application.put("/api/employees/{employee_id}/face", dependencies=[Depends(admin)], response_model=EmployeeCreated)
     def reenroll(
@@ -229,8 +252,12 @@ def create_app(settings: Settings | None = None, *, vision=None, store=None, pho
         name: Annotated[str, Form()],
         image: Annotated[list[UploadFile], File()],
         consent: Annotated[bool, Form()] = False,
+        capture_mode: Annotated[Literal["upload", "guided"], Form()] = "upload",
+        pose_labels: Annotated[str, Form()] = "",
     ):
-        return current.enroll(name, read_images(image), consent, employee_id)
+        return current.enroll(
+            name, read_images(image), consent, employee_id, capture_mode=capture_mode, pose_labels=poses(pose_labels)
+        )
 
     @application.post("/api/recognize", dependencies=[Depends(role)], response_model=RecognitionResponse)
     def recognize(

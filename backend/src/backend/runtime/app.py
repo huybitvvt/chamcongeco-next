@@ -203,6 +203,7 @@ def create_app(settings: Settings | None = None, *, vision=None, store=None, pho
             for file in files:
                 file.file.close()
 
+    @application.head("/healthz", include_in_schema=False)
     @application.get("/healthz")
     def health():
         return {"status": "ok"}

@@ -34,4 +34,6 @@ Frontend dùng Bun 1.4.0/Node 24.14.0, tự chuẩn bị MediaPipe/model local v
 
 Backend Free có thể ngủ khi không hoạt động. Khi mở lại, chờ `https://<backend>/readyz` sẵn sàng trước khi nhập mã truy cập; màn đăng nhập có timeout ngắn hơn thời gian khởi động máy chủ. Theo dõi quota database, Storage, bandwidth/build; không nâng cấp gói trả phí tự động. Kiểm tra các hạn mức hiện hành tại [Render Free](https://render.com/docs/free) và [Supabase Pricing](https://supabase.com/pricing).
 
+Giám sát UptimeRobot: tạo HTTP(s) monitor trỏ tới `https://<backend>/healthz`, chu kỳ 5 phút, timeout 60 giây. Endpoint hỗ trợ cả GET và HEAD (phương thức mặc định của HTTP monitor), không cần mã truy cập và không chạy nhận diện hoặc truy vấn DB cho mỗi lần kiểm tra. Monitor này kiểm tra tiến trình; `/readyz` tiếp tục kiểm tra model/gallery/kho dữ liệu cho Render. Request định kỳ giúp hạn chế ngủ do idle; không loại bỏ các giới hạn hoặc restart của gói Free.
+
 Bản test chỉ dùng để nghiệm thu với ít người. Camera thật, độ chính xác nhận diện/chống giả mạo và tải đồng thời phải kiểm tra tại thiết bị khách hàng.

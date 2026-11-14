@@ -76,6 +76,18 @@ class RuntimeTests(unittest.TestCase):
             files={"image": ("frame.jpg", b"fake", "image/jpeg")},
         )
 
+    def test_uptime_probe_supports_get_and_head_without_database_or_inference(self):
+        core = self.client.app.state.core
+        with patch.object(core.store, "check_health", side_effect=AssertionError("Liveness must not query storage")):
+            get = self.client.get("/healthz")
+            head = self.client.head("/healthz", headers={"User-Agent": "UptimeRobot/2.0"})
+        self.assertEqual(get.status_code, 200)
+        self.assertEqual(get.json(), {"status": "ok"})
+        self.assertEqual(head.status_code, 200)
+        self.assertEqual(head.content, b"")
+        self.assertEqual(head.headers["content-length"], get.headers["content-length"])
+        self.assertEqual(self.vision.calls, 0)
+
     def test_complete_flow_uses_receipt_and_preserves_first_times(self):
         self.assertEqual(self.enroll(count=3).status_code, 201)
         key = str(uuid4())

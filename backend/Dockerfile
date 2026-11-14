@@ -15,7 +15,9 @@ COPY backend/src ./src
 COPY backend/scripts ./scripts
 RUN uv sync --frozen --no-dev && chown -R app:app /app
 USER app
+ARG FACE_DOWNLOAD_MODELS=0
+RUN if [ "$FACE_DOWNLOAD_MODELS" = "1" ]; then APP_ENV=development python scripts/download_models.py; fi
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
-    CMD python -c "from urllib.request import urlopen; urlopen('http://127.0.0.1:8000/readyz', timeout=4).read()"
-CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1", "--no-access-log"]
+    CMD python -c "import os; from urllib.request import urlopen; urlopen('http://127.0.0.1:' + os.getenv('PORT', '8000') + '/readyz', timeout=4).read()"
+CMD ["sh", "-c", "exec uvicorn backend.main:app --host 0.0.0.0 --port \"${PORT:-8000}\" --workers 1 --no-access-log"]

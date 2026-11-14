@@ -49,7 +49,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: docker build -f backend/Dockerfile -t attendly-api:test .
+      - run: docker build --build-arg FACE_DOWNLOAD_MODELS=1 -f backend/Dockerfile -t attendly-api:test .
+      - name: Render image, embedded models and dynamic port
+        shell: bash
+        run: |
+          RENDER_SMOKE_KEY="$(openssl rand -hex 32)"
+          echo "::add-mask::$RENDER_SMOKE_KEY"
+          trap 'docker logs render-smoke; docker rm -f render-smoke' EXIT
+          docker run --detach --name render-smoke -p 127.0.0.1:18081:10000 \
+            -e PORT=10000 -e APP_ENV=production -e STORAGE_BACKEND=sqlite \
+            -e FACE_ADMIN_API_KEY="$RENDER_SMOKE_KEY" attendly-api:test
+          for i in $(seq 1 45); do
+            if [ "$(docker inspect --format '{{.State.Health.Status}}' render-smoke)" = healthy ]; then break; fi
+            sleep 2
+          done
+          test "$(docker inspect --format '{{.State.Health.Status}}' render-smoke)" = healthy
+          curl --fail --silent http://127.0.0.1:18081/readyz
       - run: docker build -f frontend/Dockerfile -t attendly-web:test .
       - name: Nginx configuration
         run: docker run --rm --add-host api:127.0.0.1 attendly-web:test nginx -t

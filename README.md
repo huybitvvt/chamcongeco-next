@@ -22,6 +22,8 @@ Tài liệu bàn giao: [chạy, cấu hình và nghiệm thu tại đơn vị](d
 
 ## Chạy local
 
+Đưa bản test miễn phí lên Render + Supabase: [cấu hình và kiểm tra deploy](docs/RENDER.md), kèm Blueprint [`render.yaml`](render.yaml).
+
 Cần Python 3.12, [uv](https://docs.astral.sh/uv/), [Bun](https://bun.sh/) và trình duyệt có camera. Không cần GPU, CMake, dlib hay cơ sở dữ liệu bên ngoài với cấu hình mặc định.
 
 Từ thư mục gốc:

@@ -1,0 +1,87 @@
+# Render Free demo; run the Supabase migrations before deploying.
+# FACE_CORS_ORIGINS must be the actual static site's HTTPS URL.
+services:
+  - type: web
+    name: chamcongeco-api-test
+    runtime: docker
+    repo: https://github.com/huybitvvt/chamcongeco-next
+    branch: main
+    region: singapore
+    plan: free
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: .
+    healthCheckPath: /readyz
+    autoDeployTrigger: commit
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: STORAGE_BACKEND
+        value: supabase
+      - key: FACE_ENGINE
+        value: insightface
+      - key: FACE_DOWNLOAD_MODELS
+        value: "1"
+      - key: FACE_CPU_THREADS
+        value: "1"
+      - key: OMP_NUM_THREADS
+        value: "1"
+      - key: OPENBLAS_NUM_THREADS
+        value: "1"
+      - key: FACE_TIMEZONE
+        value: Asia/Ho_Chi_Minh
+      - key: FACE_ADMIN_API_KEY
+        generateValue: true
+      - key: FACE_KIOSK_API_KEY
+        generateValue: true
+      - key: FACE_CORS_ORIGINS
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SECRET_KEY
+        sync: false
+
+  - type: web
+    name: chamcongeco-test
+    runtime: static
+    repo: https://github.com/huybitvvt/chamcongeco-next
+    branch: main
+    rootDir: frontend
+    buildCommand: bun install --frozen-lockfile && bun run build
+    staticPublishPath: ./dist
+    autoDeployTrigger: commit
+    envVars:
+      - key: BUN_VERSION
+        value: "1.4.0"
+      - key: NODE_VERSION
+        value: "24.14.0"
+      - key: VITE_API_URL
+        fromService:
+          type: web
+          name: chamcongeco-api-test
+          envVarKey: RENDER_EXTERNAL_URL
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    headers:
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
+      - path: /*
+        name: Referrer-Policy
+        value: no-referrer
+      - path: /*
+        name: Permissions-Policy
+        value: "camera=(self), microphone=()"
+      - path: /*
+        name: Content-Security-Policy
+        value: "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; media-src 'self' blob:; connect-src 'self' https://*.onrender.com; font-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+      - path: /assets/*
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
+      - path: /vision/*
+        name: Cache-Control
+        value: public, max-age=31536000, immutable

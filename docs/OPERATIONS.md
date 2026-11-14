@@ -24,7 +24,7 @@ Compose mặc định SQLite một máy. Nếu dùng Supabase, thêm biến môi
 ## Theo dõi và giới hạn tải
 
 - `/healthz`: process còn phục vụ HTTP; `/readyz`: model đã nạp, gallery còn hạn và đọc được kho dữ liệu. Probe không yêu cầu API key, không trả nhân viên/vector.
-- Log `Server-Timing`, `http_completed`, `vision_completed` có thời gian theo stage; không đưa ảnh hoặc bearer key vào hệ thống log phía proxy.
+- Header `Server-Timing`, log `http_completed`, `vision_completed` có thời gian theo stage. `FACE_LOG_LEVEL=INFO` mặc định; đặt `WARNING` để giảm log khi đã vận hành ổn định. Không đưa ảnh hoặc bearer key vào hệ thống log phía proxy.
 - 429 là giới hạn inference có chủ đích. UI backoff, chỉ gửi ảnh mới, giữ UUID nếu chưa rõ kết quả. Nếu nhiều camera liên tục nhận 429, cần đo lại trên server thật rồi tăng tài nguyên/worker hoặc chia trạm, không giảm bảo vệ dữ liệu.
 - 503: kho dữ liệu/ảnh/gallery/model chưa sẵn sàng. Pending không được coi là đã chấm công. Retry cùng UUID hoặc tra `/api/recognition-requests/{uuid}`.
 - Chạy một worker trước. Nhiều worker nhân bản bộ model và gallery; Supabase SQL bảo vệ ghi qua giao dịch, SQLite chỉ phù hợp cùng host/volume local, không đặt DB WAL trên NFS/SMB.

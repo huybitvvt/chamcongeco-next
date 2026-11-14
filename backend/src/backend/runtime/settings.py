@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parents[3]
 @dataclass(frozen=True)
 class Settings:
     environment: str = "development"
+    log_level: str = "INFO"
     storage_backend: str = "sqlite"
     data_dir: Path = field(default_factory=lambda: ROOT / "data" / "runtime")
     model_dir: Path = field(default_factory=lambda: ROOT / "models")
@@ -40,6 +41,8 @@ class Settings:
                 raise ValueError(f"{name} must be finite")
         if self.environment not in {"development", "production"}:
             raise ValueError("APP_ENV must be development or production")
+        if self.log_level not in {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}:
+            raise ValueError("FACE_LOG_LEVEL must be DEBUG, INFO, WARNING, ERROR or CRITICAL")
         if self.storage_backend not in {"sqlite", "supabase"}:
             raise ValueError("STORAGE_BACKEND must be sqlite or supabase; import CSV first")
         if self.engine not in {"insightface", "dlib"}:
@@ -90,6 +93,7 @@ class Settings:
 
         return cls(
             environment=value("APP_ENV", d.environment),
+            log_level=value("FACE_LOG_LEVEL", d.log_level).upper(),
             storage_backend=value("STORAGE_BACKEND", d.storage_backend),
             data_dir=value("FACE_DATA_DIR", d.data_dir, Path),
             model_dir=value("FACE_MODEL_DIR", d.model_dir, Path),

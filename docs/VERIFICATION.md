@@ -14,6 +14,8 @@ Ngày 14/11/2026. Máy phát triển Windows, Intel Core i3-1215U, RAM 8 GB, ONN
 
 Chi tiết chạy mới nhất còn được ghi trong GitHub Actions của repository. CI Linux kiểm tra cài môi trường mặc định, SQL, UI, ONNX HTTP smoke và build container; chỉ coi là đạt khi workflow thực sự xanh.
 
+**CI Linux đã đạt** tại [run 43599739494](https://github.com/huybitvvt/chamcongeco-next/actions/runs/43599739494): cả 3 job backend, frontend/SQL và containers. Ngoài build, Compose thực sự khởi động với model volume mới và API production: Nginx phục vụ UI, từ chối thiếu key, nhận key trạm, quản trị đăng ký ảnh developer, ONNX/PAD ghi một lượt công và một ảnh private; retry cùng UUID giữ nguyên giờ/biên nhận và không tạo ảnh thứ hai. Dữ liệu kiểm tra tổng hợp và volume tạm được dọn trên runner; không có kết nối Supabase thật.
+
 ## API thật, không thay model hoặc kho ảnh/DB bằng mock
 
 Script `backend/scripts/benchmark_runtime.py` khởi động Uvicorn trên localhost, dùng ONNX thật, SQLite WAL, JPEG minh chứng được fsync và lưu riêng. Gallery **200 người ×5 template**: một hồ sơ từ ảnh developer public, các hồ sơ còn lại tổng hợp. Đồng hồ test tăng ngày để mỗi lượt tạo record/ảnh mới, không vô tình đo toàn bộ ở nhánh trả biên nhận trùng. Dữ liệu tạm bị dọn sau benchmark, không đụng DB đang sử dụng.

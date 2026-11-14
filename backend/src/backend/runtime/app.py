@@ -12,6 +12,7 @@ from fastapi import Depends, FastAPI, File, Form, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException
+from backend.logging_config import configure_logging
 
 from .errors import AppError
 from .photos import LocalPhotos, SupabasePhotos
@@ -78,11 +79,18 @@ def create_app(settings: Settings | None = None, *, vision=None, store=None, pho
 
     @asynccontextmanager
     async def lifespan(application):
+        configure_logging(settings.log_level)
         core = build_core(settings, vision=vision, store=store, photos=photos, clock=clock)
         application.state.core = core
         refresher = None
         try:
             await asyncio.to_thread(core.warm_up)
+            logger.info(
+                "runtime_ready | engine=%s | storage=%s | employees=%d",
+                settings.engine,
+                settings.storage_backend,
+                len(core.gallery.snapshot().employees),
+            )
 
             async def refresh_gallery():
                 while True:

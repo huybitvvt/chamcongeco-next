@@ -1,5 +1,7 @@
 # Attendly · Chấm công khuôn mặt
 
+[![Verify](https://github.com/huybitvvt/chamcongeco-next/actions/workflows/ci.yml/badge.svg)](https://github.com/huybitvvt/chamcongeco-next/actions/workflows/ci.yml)
+
 FastAPI + React/IBM Carbon, tối ưu cho CPU phổ thông và quy mô khoảng 200 nhân viên. Lõi mặc định: **SCRFD-500MF + MobileFaceNet (buffalo_sc) + hai MiniFASNet ONNX**. Model chạy tại máy chủ của bạn; không gọi dịch vụ AI tính tiền theo lượt nhận diện.
 
 Bản phát triển tiếp từ [quantrinhansu123/chamcongeco](https://github.com/quantrinhansu123/chamcongeco), với lịch sử Git mới, không kèm dữ liệu nhân viên, ảnh khuôn mặt, khóa truy cập hay trọng số model.

@@ -21,6 +21,8 @@ class Settings:
     liveness_threshold: float = 0.85
     min_face_pixels: int = 80
     min_sharpness: float = 40.0
+    min_brightness: float = 45.0
+    max_brightness: float = 220.0
     detector_size: int = 320
     cpu_threads: int = 1
     max_upload_bytes: int = 5 * 1024 * 1024
@@ -36,7 +38,13 @@ class Settings:
     cors_origins: tuple[str, ...] = ("http://localhost:5173", "http://127.0.0.1:5173")
 
     def __post_init__(self):
-        for name in ("min_sharpness", "gallery_refresh_seconds", "gallery_max_age_seconds"):
+        for name in (
+            "min_sharpness",
+            "min_brightness",
+            "max_brightness",
+            "gallery_refresh_seconds",
+            "gallery_max_age_seconds",
+        ):
             if not math.isfinite(getattr(self, name)):
                 raise ValueError(f"{name} must be finite")
         if self.environment not in {"development", "production"}:
@@ -54,6 +62,8 @@ class Settings:
             raise ValueError("FACE_DETECTOR_SIZE must be 160..1280, divisible by 32")
         if not 1 <= self.cpu_threads <= 16 or self.min_face_pixels < 24 or self.min_sharpness < 0:
             raise ValueError("Invalid vision limits")
+        if not 0 <= self.min_brightness < self.max_brightness <= 255:
+            raise ValueError("Invalid face brightness range")
         if self.max_upload_bytes < 1 or self.max_image_pixels < 1:
             raise ValueError("Invalid upload limits")
         if not 1 <= self.gallery_refresh_seconds < self.gallery_max_age_seconds:
@@ -104,6 +114,8 @@ class Settings:
             liveness_threshold=value("FACE_LIVENESS_THRESHOLD", d.liveness_threshold, float),
             min_face_pixels=value("FACE_MIN_FACE_PIXELS", d.min_face_pixels, int),
             min_sharpness=value("FACE_MIN_SHARPNESS", d.min_sharpness, float),
+            min_brightness=value("FACE_MIN_BRIGHTNESS", d.min_brightness, float),
+            max_brightness=value("FACE_MAX_BRIGHTNESS", d.max_brightness, float),
             detector_size=value("FACE_DETECTOR_SIZE", d.detector_size, int),
             cpu_threads=value("FACE_CPU_THREADS", d.cpu_threads, int),
             max_upload_bytes=value("FACE_MAX_UPLOAD_BYTES", d.max_upload_bytes, int),

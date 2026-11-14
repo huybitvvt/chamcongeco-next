@@ -146,6 +146,105 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(result.json()["code"], "face_blurry")
         self.assertEqual(self.client.app.state.core.store.list_employees(), [])
 
+    def validate_photo(self, *, pose="front", consent="true", raw=b"candidate", reference=None):
+        files = [("image", ("candidate.jpg", raw, "image/jpeg"))]
+        if reference is not None:
+            files.append(("reference", ("front.jpg", reference, "image/jpeg")))
+        return self.client.post("/api/enrollment/validate", data={"pose": pose, "consent": consent}, files=files)
+
+    def test_preflight_policy_and_success_are_stateless_without_biometric_leaks(self):
+        policy = self.client.get("/api/enrollment/policy").json()
+        self.assertEqual(policy["version"], "face-quality-v2")
+        self.assertEqual(policy["crop_size"], 128)
+        self.assertEqual(policy["min_sharpness"], self.settings.min_sharpness)
+        core = self.client.app.state.core
+        snapshot = core.gallery.snapshot()
+        with patch.object(self.vision, "analyze", wraps=self.vision.analyze) as analyze:
+            front = self.validate_photo()
+            side = self.validate_photo(pose="left", reference=b"front")
+        self.assertEqual(front.status_code, 200, front.text)
+        self.assertFalse(front.json()["reference_checked"])
+        self.assertEqual(side.json()["pose"], "left")
+        self.assertTrue(side.json()["reference_checked"])
+        self.assertTrue(all(call.kwargs == {"liveness": False} for call in analyze.call_args_list))
+        self.assertEqual(len(analyze.call_args_list), 3)
+        self.assertIs(core.gallery.snapshot(), snapshot)
+        self.assertEqual(core.store.list_employees(), [])
+        self.assertEqual(core.store.list_attendance(self.now.date().isoformat()), [])
+        self.assertFalse(list(self.settings.data_dir.rglob("*.jpg")))
+        self.assertNotIn("embedding", side.text)
+        self.assertNotIn("face_encoding", side.text)
+
+    def test_preflight_requires_consent_reference_and_admin(self):
+        before = self.vision.calls
+        self.assertEqual(self.validate_photo(consent="false").json()["code"], "consent_required")
+        self.assertEqual(self.validate_photo(pose="left").json()["code"], "reference_required")
+        self.assertEqual(self.vision.calls, before)
+        settings = replace(
+            self.settings, data_dir=self.settings.data_dir / "auth", admin_key="a" * 32, kiosk_key="k" * 32
+        )
+        with TestClient(create_app(settings, vision=self.vision)) as client:
+            for key, status in [(None, 401), ("k" * 32, 403), ("a" * 32, 200)]:
+                headers = {"Authorization": "Bearer " + key} if key else {}
+                self.assertEqual(client.get("/api/enrollment/policy", headers=headers).status_code, status)
+                response = client.post(
+                    "/api/enrollment/validate",
+                    headers=headers,
+                    data={"consent": "true"},
+                    files={"image": ("a.jpg", b"fake", "image/jpeg")},
+                )
+                self.assertEqual(response.status_code, status)
+
+    def test_preflight_rejects_quality_and_wrong_identity_before_counting_sample(self):
+        with patch.object(self.vision, "analyze", side_effect=AppError("face_blurry", "Ảnh đang mờ.")):
+            self.assertEqual(self.validate_photo().json()["code"], "face_blurry")
+        original = self.vision.analyze
+
+        def analyze(raw, **kwargs):
+            self.vision.vector = np.eye(1, 512, k=1 if raw == b"other" else 0, dtype=np.float32).ravel()
+            return original(raw, **kwargs)
+
+        with patch.object(self.vision, "analyze", side_effect=analyze):
+            result = self.validate_photo(pose="right", raw=b"other", reference=b"front")
+            self.assertEqual(result.json()["code"], "different_faces")
+            # Retaking front must compare too, otherwise the other slots become stale.
+            self.assertEqual(self.validate_photo(raw=b"other", reference=b"front").json()["code"], "different_faces")
+        self.assertEqual(self.client.app.state.core.store.list_employees(), [])
+        self.assertEqual(self.validate_photo().status_code, 200)
+
+    def test_preflight_has_bounded_concurrency_and_releases_lock_after_failure(self):
+        core = self.client.app.state.core
+        core._preflight_lock.acquire()
+        try:
+            response = self.validate_photo()
+            self.assertEqual(response.status_code, 429)
+            self.assertEqual(response.headers["Retry-After"], "1")
+        finally:
+            core._preflight_lock.release()
+        with patch.object(self.vision, "analyze", side_effect=AppError("face_blurry", "Ảnh đang mờ.")):
+            self.assertEqual(self.validate_photo().status_code, 422)
+        self.assertEqual(self.validate_photo().status_code, 200)
+
+    def test_final_save_revalidates_even_after_successful_preflight(self):
+        self.assertEqual(self.validate_photo().status_code, 200)
+        with patch.object(self.vision, "analyze", side_effect=AppError("face_blurry", "Ảnh đang mờ.")):
+            self.assertEqual(self.enroll().json()["code"], "face_blurry")
+        self.assertEqual(self.client.app.state.core.store.list_employees(), [])
+
+    def test_preflight_invalid_reference_requires_restart_and_releases_inference(self):
+        original = self.vision.analyze
+
+        def analyze(raw, **kwargs):
+            if raw == b"bad-reference":
+                raise AppError("face_blurry", "Ảnh đang mờ.")
+            return original(raw, **kwargs)
+
+        with patch.object(self.vision, "analyze", side_effect=analyze):
+            result = self.validate_photo(pose="left", reference=b"bad-reference")
+        self.assertEqual(result.json()["code"], "reference_invalid")
+        self.assertEqual(self.validate_photo().status_code, 200)
+        self.assertEqual(self.client.app.state.core.store.list_employees(), [])
+
     def test_enrollment_identity_switch_returns_index_and_no_partial_profile(self):
         original = self.vision.analyze
         calls = []

@@ -1,4 +1,5 @@
 import type { EmployeeAttendance, EmployeeCreated, RecognitionResponse, RequestStatus, Session } from '../types/face'
+import type { EnrollmentValidation, PoseId, QualityPolicy } from '../enrollment/types'
 
 const API_URL = (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '')
 const KEY = 'attendly.access-key'
@@ -30,7 +31,7 @@ async function request<T>(path: string, options: RequestInit = {}, timeoutMs = 1
   } catch {
     if (options.signal?.aborted) throw new DOMException('Đã hủy yêu cầu.', 'AbortError')
     throw new ApiError(timeout.aborted
-      ? 'Máy chủ phản hồi chậm. Đang kiểm tra lại kết quả chấm công.'
+      ? 'Máy chủ phản hồi chậm. Kiểm tra kết nối rồi thử lại.'
       : 'Không kết nối được máy chủ chấm công. Kiểm tra kết nối.', 0, timeout.aborted ? 'timeout' : 'network')
   }
   if (!response.ok) {
@@ -50,8 +51,18 @@ async function request<T>(path: string, options: RequestInit = {}, timeoutMs = 1
 }
 
 export const getSession = (signal?: AbortSignal) => request<Session>('/api/session', { signal })
+export const getEnrollmentPolicy = (signal?: AbortSignal) => request<QualityPolicy>('/api/enrollment/policy', { signal })
 export const getEmployees = (signal?: AbortSignal) => request<EmployeeAttendance[]>('/api/employees', { signal })
 export const getRequestStatus = (id: string, signal?: AbortSignal) => request<RequestStatus>(`/api/recognition-requests/${encodeURIComponent(id)}`, { signal })
+
+export function validateEnrollmentPhoto(image: File, pose: PoseId, signal: AbortSignal, reference?: File) {
+  const body = new FormData()
+  body.append('consent', 'true')
+  body.append('pose', pose)
+  body.append('image', image)
+  if (reference) body.append('reference', reference)
+  return request<EnrollmentValidation>('/api/enrollment/validate', { method: 'POST', body, signal }, 10_000)
+}
 
 export function enrollEmployee(name: string, images: File[], employeeId?: string, signal?: AbortSignal, poses?: readonly string[]): Promise<EmployeeCreated> {
   const body = new FormData()

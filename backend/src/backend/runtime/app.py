@@ -17,8 +17,17 @@ from backend.logging_config import configure_logging
 
 from .errors import AppError
 from .photos import LocalPhotos, SupabasePhotos
+from .quality import quality_policy
 from .service import AttendanceApplication
-from .schemas import EmployeeAttendance, EmployeeCreated, RecognitionResponse, PendingRequest, Session
+from .schemas import (
+    EmployeeAttendance,
+    EmployeeCreated,
+    RecognitionResponse,
+    PendingRequest,
+    Session,
+    QualityPolicy,
+    EnrollmentValidation,
+)
 from .settings import Settings
 from .store import SqliteStore
 from .supabase import SupabaseStore, create_client
@@ -222,6 +231,21 @@ def create_app(settings: Settings | None = None, *, vision=None, store=None, pho
     @application.get("/api/session", response_model=Session)
     def session(current: Annotated[str, Depends(role)]):
         return {"role": current, "authentication_required": bool(settings.admin_key)}
+
+    @application.get("/api/enrollment/policy", dependencies=[Depends(admin)], response_model=QualityPolicy)
+    def enrollment_policy():
+        return quality_policy(settings)
+
+    @application.post("/api/enrollment/validate", dependencies=[Depends(admin)], response_model=EnrollmentValidation)
+    def validate_enrollment(
+        current: Annotated[AttendanceApplication, Depends(core)],
+        image: Annotated[UploadFile, File()],
+        consent: Annotated[bool, Form()] = False,
+        pose: Annotated[Literal["front", "left", "right", "up", "down"], Form()] = "front",
+        reference: Annotated[UploadFile | None, File()] = None,
+    ):
+        images = read_images([image] + ([reference] if reference else []))
+        return current.validate_enrollment(images[0][1], consent, pose, images[1][1] if reference else None)
 
     @application.get("/api/employees", dependencies=[Depends(role)], response_model=list[EmployeeAttendance])
     def employees(current: Annotated[AttendanceApplication, Depends(core)]):

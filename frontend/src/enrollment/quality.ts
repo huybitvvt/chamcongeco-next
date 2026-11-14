@@ -1,4 +1,4 @@
-import type { FrameAssessment } from './types'
+import type { FrameAssessment, QualityPolicy } from './types'
 export interface Point { x: number; y: number; z?: number }
 export interface Bounds { x: number; y: number; width: number; height: number }
 
@@ -31,13 +31,27 @@ export function pixelQuality(rgba: Uint8ClampedArray, width: number, height: num
   return { brightness: sum / Math.max(1, gray.length), sharpness: Math.max(0, squared / Math.max(1, count) - (laplacian / Math.max(1, count)) ** 2) }
 }
 
-export function qualityIssue(box: Bounds, brightness: number, sharpness: number, eyes: number): FrameAssessment['issue'] {
+export function validatePolicy(policy: QualityPolicy): void {
+  if (!policy || policy.version !== 'face-quality-v2' || policy.crop_size !== 128 ||
+    ![policy.min_sharpness, policy.min_brightness, policy.max_brightness, policy.min_face_pixels].every(Number.isFinite) ||
+    policy.min_sharpness < 0 || policy.min_brightness < 0 || policy.max_brightness > 255 ||
+    policy.min_brightness >= policy.max_brightness || policy.min_face_pixels < 24) {
+    throw new Error('Bộ hướng dẫn camera chưa khớp với máy chủ. Tải lại trang rồi thử lại.')
+  }
+}
+
+/** Prefer detail among already valid, stable frames; do not saturate sharpness. */
+export function qualityScore(brightness: number, sharpness: number): number {
+  return Math.log1p(Math.max(0, sharpness)) * 100 - Math.abs(brightness - 130) * .35
+}
+
+export function qualityIssue(box: Bounds, brightness: number, sharpness: number, eyes: number, policy: QualityPolicy): FrameAssessment['issue'] {
   if (box.width < .23 || box.height < .28) return 'too-small'
   if (box.width > .78 || box.height > .88) return 'too-close'
   if (box.x < .015 || box.y < .015 || box.x + box.width > .985 || box.y + box.height > .985) return 'cropped'
-  if (brightness < 45) return 'dark'
-  if (brightness > 220) return 'bright'
-  if (sharpness < 35) return 'blurry'
+  if (brightness < policy.min_brightness) return 'dark'
+  if (brightness > policy.max_brightness) return 'bright'
+  if (sharpness < policy.min_sharpness) return 'blurry'
   if (eyes < .13) return 'eyes-closed'
   return null
 }

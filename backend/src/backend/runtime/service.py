@@ -19,6 +19,7 @@ class AttendanceApplication:
         self.clock = clock or (lambda: datetime.now(ZoneInfo(settings.timezone)))
         self.gallery = Gallery(store, vision, settings.gallery_max_age_seconds)
         self._enrollment_lock = Lock()
+        self._preflight_lock = Lock()
         self._receipts = OrderedDict()
         self._receipt_lock = Lock()
 
@@ -34,6 +35,42 @@ class AttendanceApplication:
     def employees(self, day=None):
         day = day or self.clock().date().isoformat()
         return self.gallery.employees_with_attendance(self.store.list_attendance(day))
+
+    def validate_enrollment(self, raw: bytes, consent: bool, pose: str, reference: bytes | None = None):
+        """Stateless: no profile, photo, receipt, gallery refresh or vector in HTTP."""
+        if not consent:
+            raise AppError("consent_required", "Cần xác nhận nhân viên đã đồng ý trước khi kiểm tra khuôn mặt.")
+        if pose != "front" and reference is None:
+            raise AppError("reference_required", "Cần ảnh nhìn thẳng đã được kiểm tra trước khi thu góc tiếp theo.")
+        if not self._preflight_lock.acquire(blocking=False):
+            raise AppError("busy", "Máy chủ đang kiểm tra ảnh khác. Vui lòng giữ yên một chút.", 429)
+        try:
+            analysis = self.vision.analyze(raw, liveness=False)
+            if len(analysis.faces) != 1:
+                raise AppError("face_count", "Mỗi ảnh đăng ký phải có đúng một khuôn mặt.")
+            if reference is not None:
+                try:
+                    original = self.vision.analyze(reference, liveness=False)
+                except AppError as error:
+                    if error.status in {429, 503}:
+                        raise
+                    raise AppError("reference_invalid", "Ảnh nhìn thẳng chưa đạt. Hãy thu lại từ đầu.") from error
+                if len(original.faces) != 1:
+                    raise AppError("reference_invalid", "Ảnh nhìn thẳng chưa đạt. Hãy thu lại từ đầu.")
+                if not self._same_person(analysis.faces[0].embedding, original.faces[0].embedding):
+                    raise AppError(
+                        "different_faces", "Ảnh chưa khớp với góc nhìn thẳng. Hãy để cùng một người trước camera."
+                    )
+            return dict(valid=True, pose=pose, reference_checked=reference is not None, quality=analysis.quality)
+        finally:
+            self._preflight_lock.release()
+
+    def _same_person(self, vector, reference):
+        return (
+            np.linalg.norm(np.asarray(vector) - reference) <= 0.45
+            if self.vision.model_id == LEGACY_MODEL_ID
+            else float(np.asarray(vector) @ reference) >= self.settings.cosine_threshold
+        )
 
     def enroll(
         self,
@@ -63,14 +100,8 @@ class AttendanceApplication:
             if len(analysis.faces) != 1:
                 raise AppError("face_count", "Mỗi ảnh đăng ký phải có đúng một khuôn mặt.", image_index=index)
             vectors.append(np.asarray(analysis.faces[0].embedding))
-        legacy = self.vision.model_id == LEGACY_MODEL_ID
         for index, vector in enumerate(vectors[1:], start=1):
-            consistent = (
-                np.linalg.norm(vector - vectors[0]) <= 0.45
-                if legacy
-                else float(vector @ vectors[0]) >= self.settings.cosine_threshold
-            )
-            if not consistent:
+            if not self._same_person(vector, vectors[0]):
                 raise AppError(
                     "different_faces", "Các ảnh chưa khớp cùng một người. Hãy chụp lại rõ mặt.", image_index=index
                 )

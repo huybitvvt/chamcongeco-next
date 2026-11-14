@@ -1,4 +1,4 @@
-import type { FrameAssessment, WorkerReply } from './types'
+import type { FrameAssessment, QualityPolicy, WorkerReply } from './types'
 
 export class VisionTracker {
   private worker = new Worker(new URL('./vision.worker.ts', import.meta.url), { type: 'module' })
@@ -23,7 +23,7 @@ export class VisionTracker {
     this.pending.clear()
   }
 
-  private request(type: 'init' | 'frame', bitmap?: ImageBitmap, timestamp?: number): Promise<WorkerReply> {
+  private request(type: 'init' | 'frame', bitmap?: ImageBitmap, timestamp?: number, policy?: QualityPolicy): Promise<WorkerReply> {
     if (this.closed) { bitmap?.close(); return Promise.reject(new DOMException('Đã hủy.', 'AbortError')) }
     const id = this.nextId++
     return new Promise((resolve, reject) => {
@@ -32,12 +32,12 @@ export class VisionTracker {
         reject(new Error(type === 'init' ? 'Tải bộ hướng dẫn camera quá lâu. Thử lại hoặc chọn Tải ảnh lên.' : 'Camera phản hồi chậm. Hãy bắt đầu lại.'))
       }, type === 'init' ? 45_000 : 8_000)
       this.pending.set(id, { resolve, reject, timer })
-      try { this.worker.postMessage({ type, id, bitmap, timestamp }, bitmap ? [bitmap] : []) }
+      try { this.worker.postMessage({ type, id, bitmap, timestamp, policy }, bitmap ? [bitmap] : []) }
       catch (error) { clearTimeout(timer); this.pending.delete(id); bitmap?.close(); reject(error) }
     })
   }
 
-  async initialize() { await this.request('init') }
+  async initialize(policy: QualityPolicy) { await this.request('init', undefined, undefined, policy) }
   async analyze(bitmap: ImageBitmap, timestamp: number): Promise<FrameAssessment> {
     const reply = await this.request('frame', bitmap, timestamp)
     if (reply.type !== 'frame') throw new Error('Không đọc được hướng khuôn mặt.')

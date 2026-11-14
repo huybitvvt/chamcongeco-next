@@ -71,10 +71,11 @@ export class CaptureGate {
     if (reset) { this.since = now; this.count = 0; this.best = -Infinity; this.anchor = angle }
     this.previous = now
     this.count++
-    const replaceBest = frame.score > this.best
-    if (replaceBest) this.best = frame.score
     const held = now - (this.since ?? now)
-    const capture = held >= 550 && this.count >= 4
-    return { progress: Math.min(100, Math.floor(held / 550 * 100)), reset, replaceBest, capture, hint: capture ? 'Đã chọn ảnh rõ mặt.' : 'Đúng góc. Giữ yên một chút…' }
+    // Ignore the first settling frames after movement/autofocus before ranking.
+    const replaceBest = held >= 200 && this.count >= 3 && frame.score > this.best
+    if (replaceBest) this.best = frame.score
+    const capture = held >= 700 && this.count >= 5 && Number.isFinite(this.best)
+    return { progress: Math.min(100, Math.floor(held / 700 * 100)), reset, replaceBest, capture, hint: capture ? 'Đã chọn ảnh, chuẩn bị kiểm tra.' : 'Đúng góc. Giữ yên một chút…' }
   }
 }

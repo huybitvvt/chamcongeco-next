@@ -29,7 +29,9 @@ sequenceDiagram
 
 SCRFD-500MF ở 320×320, letterbox; 5 landmark căn chỉnh về 112×112; MobileFaceNet xuất vector 512 chiều chuẩn hóa. Hai MiniFASNet dùng vùng có ngữ cảnh ×2.7/×4, BGR 0–255, NHWC; softmax đã có trong ONNX. Không đưa crop đã align cho PAD vì làm mất ngữ cảnh màn hình/ảnh in.
 
-Mỗi ảnh được giải mã/phát hiện một lần. Từ chối nhiều người, mặt quá nhỏ/mờ trước khi match. Liveness mặc định 0.85; cosine 0.50 và khoảng cách với **người thứ hai** 0.08. Nhiều template của cùng một người không bị coi là ứng viên cạnh tranh. Các ngưỡng là cấu hình ban đầu, cần hiệu chỉnh trên camera thật; không phải ngưỡng bảo đảm sai số.
+Mỗi ảnh được giải mã/phát hiện một lần. Từ chối nhiều người, mặt quá nhỏ/mờ/tối/quá sáng trước khi match. Chất lượng `face-quality-v2` đo trên ROI chuẩn hóa 128×128; ngưỡng do server cung cấp cho camera worker. Crop chỉ dùng để đo chất lượng, không thay ảnh gốc đưa vào PAD/recognizer. Liveness mặc định 0.85; cosine 0.50 và khoảng cách với **người thứ hai** 0.08. Nhiều template của cùng một người không bị coi là ứng viên cạnh tranh. Các ngưỡng là cấu hình ban đầu, cần hiệu chỉnh trên camera thật; không phải ngưỡng bảo đảm sai số.
+
+Đăng ký camera có preflight admin + consent cho từng ảnh được chọn; kiểm tra chất lượng và so embedding với ảnh thẳng tham chiếu trong cùng request. Không ghi profile/ảnh/lượt công hoặc trả vector về client. Một preflight mỗi process, dùng chung khóa inference, trả 429 khi bận. Cuối luồng vẫn kiểm tra cả bộ và ghi nguyên tử. Xem [AUTO_ENROLLMENT.md](AUTO_ENROLLMENT.md) về giới hạn retry và việc nhãn pose không thay cho liveness.
 
 Không ghép OR nhiều engine. `face_model` gồm tên pack và SHA-256 của recognizer; gallery chỉ dùng template thuộc model đó. Hồ sơ dlib 128 chiều được giữ riêng trong `face_profiles`. Đổi detector/căn chỉnh/ngưỡng vẫn cần nghiệm thu lại dù recognizer giữ nguyên.
 

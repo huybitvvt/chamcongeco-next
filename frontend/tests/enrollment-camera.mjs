@@ -19,7 +19,7 @@ test('automatically selects all five poses, stops camera, submits once and retak
       return route.fulfill(posts===1?{status:422,json:{code:'face_blurry',detail:'Ảnh góc phải đang mờ.',image_index:2}}:{status:201,json:{name:'Synthetic Automatic',employee_id:'emp_001',template_count:5}})
     })
     await page.getByRole('button',{name:'Bắt đầu thu 5 góc',exact:true}).click()
-    await page.getByText('Đã thu 5/5 góc',{exact:true}).waitFor({timeout:30_000})
+    await page.getByText('Đã kiểm tra 5/5 góc',{exact:true}).waitFor({timeout:30_000})
     assert.equal(await page.locator('.pose-card img').count(),5)
     assert.equal(posts,0,'capture alone never enrolls')
     assert.equal(await page.locator('video').evaluate(video=>video.srcObject),null)

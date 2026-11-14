@@ -10,13 +10,15 @@ Bản phát triển tiếp từ [quantrinhansu123/chamcongeco](https://github.co
 
 - Giải mã ảnh/phát hiện mặt một lần; chạy hoàn toàn bằng ONNX Runtime CPU, không cần PyTorch/DeepFace ở luồng mặc định. Kiểm tra checksum và nạp model trước khi API sẵn sàng.
 - Gallery bất biến trong RAM, 1–5 vector/người, có mã phiên bản model. Hồ sơ dlib cũ được giữ riêng; cần cập nhật ảnh để dùng engine mới.
-- Đăng ký tự thu **5 góc qua camera** bằng MediaPipe chạy trong Web Worker: hướng dẫn pose, đợi ổn định, chọn ảnh rõ, xem lại và chụp lại từng góc. Có đường tải 1–5 ảnh khi camera không khả dụng.
+- Đăng ký tự thu **5 góc qua camera** bằng MediaPipe chạy trong Web Worker: chọn khung ổn định, server kiểm tra ngay từng góc và tự thu lại ảnh chưa đạt. Browser/server dùng chung quality policy, có autofocus/exposure khi camera hỗ trợ. Xem lại trước khi lưu; có đường tải 1–5 ảnh khi camera không khả dụng.
 - SQLite WAL mặc định, hoặc Supabase qua kết nối HTTP dùng lại và RPC nguyên tử. CSV cũ chỉ là nguồn nhập, không còn là kho ghi đồng thời.
 - Mỗi lượt có UUID và biên nhận lưu bền vững. Retry trả lại thời gian đã lưu; bấm lặp trong 30 giây không biến giờ vào thành giờ ra. Ảnh riêng tư được lưu trước khi xác nhận công.
 - Camera chỉ có một yêu cầu đang xử lý, tự điều chỉnh nhịp gửi, có timeout/backoff và khôi phục biên nhận sau mất mạng/tải lại trang. Dừng camera khi chuyển màn hình hoặc đưa tab xuống nền.
 - Phân quyền quản trị/trạm, kiểm tra đồng ý phía máy chủ, giới hạn ảnh và tránh trả vector sinh trắc học ra API danh sách.
 
 **Đây là bản đã kiểm tra phần mềm và đo cục bộ, chưa được nghiệm thu trên camera/nhân viên thật.** MiniFASNet là bộ lọc chống giả mạo thụ động, không bảo đảm chặn mọi ảnh/video. Một số ảnh chân dung công khai vẫn qua được bộ lọc. Xem [kết quả và giới hạn](docs/VERIFICATION.md), [kiến trúc](docs/ARCHITECTURE.md).
+
+Tài liệu bàn giao: [chạy, cấu hình và nghiệm thu tại đơn vị](docs/HANDOVER.md). `face-quality-v2` đo độ nét trên crop chuẩn hóa 128×128; nếu đã tự chỉnh `FACE_MIN_SHARPNESS` ở bản cũ, cần hiệu chuẩn lại. Không dùng model phục chế/làm đẹp để tạo mẫu hoặc vượt kiểm tra người thật.
 
 ## Chạy local
 
@@ -59,7 +61,7 @@ Chạy hai lần để có mã quản trị và mã trạm. Nhập mã trên mà
 
 ## Sử dụng
 
-1. Quản trị viên điền tên, xác nhận đồng ý rồi bấm **Bắt đầu thu 5 góc**. Nhân viên nhìn thẳng, quay trái/phải, ngẩng/cúi nhẹ theo chỉ dẫn; hệ thống tự chọn ảnh và dừng camera. Xem lại rồi bấm **Lưu nhân viên**. Có thể chụp lại riêng góc lỗi hoặc chọn **Tải ảnh lên** để dùng 1–5 ảnh có sẵn.
+1. Quản trị viên điền tên, xác nhận đồng ý rồi bấm **Bắt đầu thu 5 góc**. Nhân viên nhìn thẳng, quay trái/phải, ngẩng/cúi nhẹ theo chỉ dẫn; hệ thống tự chọn ảnh, kiểm tra ngay trên server rồi mới đánh dấu từng góc. Đủ **Đã kiểm tra 5/5 góc** thì camera tự dừng. Xem lại rồi bấm **Lưu nhân viên**. Có thể chụp lại riêng góc lỗi hoặc chọn **Tải ảnh lên** để dùng 1–5 ảnh có sẵn.
 2. Nhân viên bấm **Chấm công**, nhìn thẳng camera. Chỉ một người trong khung hình. Lượt đầu ngày ghi giờ vào; lượt tiếp theo sau khoảng chống bấm lặp ghi giờ ra.
 3. Chỉ biên nhận `confirmed` mới hiển thị **Đã lưu**. Khi mất mạng, bấm lại sẽ kiểm tra lượt đang chờ trước khi tạo lượt mới.
 4. Hồ sơ cũ có nhãn **Cần cập nhật khuôn mặt**: quản trị viên chọn **Cập nhật ảnh** trên đúng nhân viên. Mã nhân viên và lịch sử công được giữ nguyên.

@@ -1,7 +1,13 @@
 import { describe, expect, test } from 'bun:test'
 import { CaptureGate, orientationFromMatrix, poseMatches } from '../src/enrollment/pose'
-import { eyeAspectRatio, faceBounds, pixelQuality, qualityIssue } from '../src/enrollment/quality'
-import type { FrameAssessment, Orientation, PoseId } from '../src/enrollment/types'
+import { eyeAspectRatio, faceBounds, pixelQuality, qualityIssue as inspectQuality, qualityScore, validatePolicy } from '../src/enrollment/quality'
+import type { Bounds } from '../src/enrollment/quality'
+import { configureCamera } from '../src/enrollment/camera'
+import type { FrameAssessment, Orientation, PoseId, QualityPolicy } from '../src/enrollment/types'
+import golden from '../../tools/face-quality-fixtures.json'
+
+const policy = golden.policy as QualityPolicy
+const qualityIssue = (box: Bounds, brightness: number, sharpness: number, eyes: number) => inspectQuality(box, brightness, sharpness, eyes, policy)
 
 const angle = (yaw = 0, pitch = 0, roll = 0): Orientation => ({ yaw, pitch, roll })
 const frame = (orientation = angle(), changes: Partial<FrameAssessment> = {}): FrameAssessment => ({ faceCount: 1, orientation, issue: null, score: 120, sharpness: 120, brightness: 130, ...changes })
@@ -36,8 +42,8 @@ describe('pose matrices and subject-relative directions', () => {
 describe('time-based selection gate', () => {
   test('holds stable pose over time and selects best frame rather than last frame', () => {
     const gate = new CaptureGate('front')
-    const results = [0,110,220,330,440,550].map((t,i)=>gate.update(frame(angle(),{score:[10,30,80,60,40,20][i]}),t))
-    expect(results.map(r=>r.replaceBest)).toEqual([true,true,true,false,false,false])
+    const results = [0,110,220,330,440,550,660,770].map((t,i)=>gate.update(frame(angle(),{score:[999,999,80,60,40,20,10,5][i]}),t))
+    expect(results.map(r=>r.replaceBest)).toEqual([false,false,true,false,false,false,false,false])
     expect(results.slice(0,-1).some(r=>r.capture)).toBe(false)
     expect(results.at(-1)?.capture).toBe(true)
   })
@@ -81,9 +87,59 @@ describe('face quality', () => {
     for(let y=0;y<16;y++)for(let x=0;x<16;x++)for(let c=0;c<3;c++)flat[(y*16+x)*4+c]=(x+y)%2 ? 210 : 50
     expect(pixelQuality(flat,16,16).sharpness).toBeGreaterThan(100)
   })
+  test('uses the same golden luminance/kernel as Python, including color and boundaries', () => {
+    const n = golden.size
+    for(const sample of golden.cases){
+      const rgba=new Uint8ClampedArray(n*n*4)
+      for(let y=0;y<n;y++)for(let x=0;x<n;x++){
+        const value=sample.kind==='flat'?120:sample.kind==='checker'?((x+y)%2?80:40):sample.kind==='ramp'?64+x:x<n/2?80:180
+        const rgb=sample.kind==='color'?[100,150,200]:[value,value,value]
+        rgba.set([...rgb,255],(y*n+x)*4)
+      }
+      const result=pixelQuality(rgba,n,n)
+      expect(result.brightness).toBeCloseTo(sample.brightness,6)
+      expect(result.sharpness).toBeCloseTo(sample.sharpness,6)
+    }
+  })
+  test('server policy overrides local thresholds and incompatible policy fails clearly', () => {
+    const box={x:.3,y:.1,width:.4,height:.7}
+    expect(inspectQuality(box,130,50,.25,{...policy,min_sharpness:60})).toBe('blurry')
+    expect(inspectQuality(box,130,50,.25,{...policy,min_sharpness:45})).toBeNull()
+    expect(()=>validatePolicy({...policy,min_sharpness:NaN})).toThrow()
+    expect(()=>validatePolicy({...policy,version:'old'} as unknown as QualityPolicy)).toThrow()
+    expect(()=>validatePolicy(policy)).not.toThrow()
+    expect(qualityScore(130,1500)).toBeGreaterThan(qualityScore(130,1100))
+    expect(qualityScore(120,100)).toBeGreaterThan(qualityScore(60,100))
+  })
   test('invalid mesh is rejected and eye openness is scale-aware', () => {
     expect(faceBounds([])).toBeNull()
     const points=[{x:0,y:.5},{x:.2,y:.4},{x:.8,y:.4},{x:1,y:.5},{x:.8,y:.6},{x:.2,y:.6}]
     expect(eyeAspectRatio(points,[0,1,2,3,4,5],100,100)).toBeCloseTo(.2,3)
+  })
+})
+
+describe('optional camera controls',()=>{
+  test('only enables advertised continuous modes and tolerates driver rejection',async()=>{
+    const changes: MediaTrackConstraints[]=[]
+    const track={readyState:'live',getCapabilities:()=>({focusMode:['manual','continuous'],exposureMode:['continuous']}),
+      applyConstraints:async(value:MediaTrackConstraints)=>{changes.push(value);if(changes.length===1)throw new Error('unsupported driver')}} as unknown as MediaStreamTrack
+    await configureCamera(track,new AbortController().signal)
+    expect(changes).toEqual([{advanced:[{focusMode:'continuous'}]},{advanced:[{exposureMode:'continuous'}]}])
+  })
+  test('fixed-focus devices and canceled initialization do not request unsupported controls',async()=>{
+    let calls=0
+    const track={readyState:'live',getCapabilities:()=>({}),applyConstraints:async()=>{calls++}} as unknown as MediaStreamTrack
+    await configureCamera(track,new AbortController().signal)
+    const controller=new AbortController();controller.abort()
+    await configureCamera(track,controller.signal)
+    expect(calls).toBe(0)
+  })
+  test('cancel releases a hanging driver without sending more controls',async()=>{
+    let calls=0
+    const controller=new AbortController()
+    const track={readyState:'live',getCapabilities:()=>({focusMode:['continuous'],exposureMode:['continuous']}),
+      applyConstraints:()=>{calls++;controller.abort();return new Promise<void>(()=>{})}} as unknown as MediaStreamTrack
+    await configureCamera(track,controller.signal)
+    expect(calls).toBe(1)
   })
 })

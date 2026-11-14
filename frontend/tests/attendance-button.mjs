@@ -9,6 +9,18 @@ test('attendance button starts recognition, shows readable names and times, and 
   })
   try {
     const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } })
+    await page.addInitScript(()=>{
+      window.cameraControls=[]
+      const media=navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices)
+      navigator.mediaDevices.getUserMedia=async options=>{
+        const stream=await media(options)
+        for(const track of stream.getVideoTracks()){
+          track.getCapabilities=()=>({focusMode:['continuous'],exposureMode:['continuous']})
+          track.applyConstraints=async constraints=>{window.cameraControls.push(constraints);throw new DOMException('Unsupported fake driver','OverconstrainedError')}
+        }
+        return stream
+      }
+    })
     let arrived = false
     let departed = false
     let failure = null
@@ -86,6 +98,10 @@ test('attendance button starts recognition, shows readable names and times, and 
     await page.getByRole('button', { name: 'Dừng chấm công', exact: true }).click()
     await page.locator('#main-content').getByRole('button', { name: 'Chấm công', exact: true }).last().waitFor()
     assert.equal(await page.locator('video').evaluate(video => video.srcObject), null)
+    assert.deepEqual(await page.evaluate(()=>window.cameraControls),[
+      {advanced:[{focusMode:'continuous'}]}, {advanced:[{exposureMode:'continuous'}]},
+      {advanced:[{focusMode:'continuous'}]}, {advanced:[{exposureMode:'continuous'}]},
+    ])
   } finally {
     await browser.close()
   }

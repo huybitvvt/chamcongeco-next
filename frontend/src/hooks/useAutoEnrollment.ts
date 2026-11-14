@@ -3,8 +3,12 @@ import { CaptureGate } from '../enrollment/pose'
 import { POSES } from '../enrollment/types'
 import type { CapturedPhoto, Orientation, PoseId } from '../enrollment/types'
 import { VisionTracker } from '../enrollment/tracker'
+import { configureCamera } from '../enrollment/camera'
+import { validatePolicy } from '../enrollment/quality'
+import { ApiError, getEnrollmentPolicy, validateEnrollmentPhoto } from '../services/api'
 
-type State = 'idle' | 'loading' | 'capturing' | 'paused' | 'review' | 'error'
+type State = 'idle' | 'loading' | 'capturing' | 'checking' | 'paused' | 'review' | 'error'
+const retryableQuality = new Set(['face_blurry', 'face_dark', 'face_bright', 'face_too_small', 'face_count', 'face_alignment', 'different_faces'])
 const abortError = () => new DOMException('Đã hủy.', 'AbortError')
 const delay = (ms: number, signal: AbortSignal) => new Promise<void>((resolve, reject) => {
   if (signal.aborted) { reject(abortError()); return }
@@ -77,11 +81,20 @@ export function useAutoEnrollment() {
       const camera = navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 960 } }, audio: false }).then(async stream => {
         if (!active()) { stream.getTracks().forEach(track => track.stop()); throw abortError() }
         resources.current.stream = stream
+        const track = stream.getVideoTracks()[0]
+        if (track) await configureCamera(track, controller.signal)
+        if (!active()) throw abortError()
         if (!videoRef.current) throw abortError()
         videoRef.current.srcObject = stream
         await videoRef.current.play()
       })
-      await Promise.all([camera, tracker.initialize()])
+      const initialize = async () => {
+        const policy = await getEnrollmentPolicy(controller.signal)
+        validatePolicy(policy)
+        if (!active()) throw abortError()
+        await tracker.initialize(policy)
+      }
+      await Promise.all([camera, initialize()])
       if (!active()) return
       const video = videoRef.current
       if (!video) throw abortError()
@@ -98,8 +111,10 @@ export function useAutoEnrollment() {
       for (const pose of goals) {
         if (!active()) return
         setTarget(pose); setProgress(0)
-        const gate = new CaptureGate(pose, pose === 'front' ? undefined : photosRef.current.front?.orientation)
+        const gateForPose = () => new CaptureGate(pose, pose === 'front' ? undefined : photosRef.current.front?.orientation)
+        let gate = gateForPose()
         let best: { canvas: HTMLCanvasElement; orientation: Orientation } | null = null
+        let qualityAttempts = 0
         let lastFrame = -1, lastNewFrame = performance.now()
         const deadline = performance.now() + 60_000
         while (active()) {
@@ -129,10 +144,45 @@ export function useAutoEnrollment() {
             const blob = await jpeg(best.canvas)
             if (!active()) return
             const file = new File([blob], `${pose}.jpg`, { type: 'image/jpeg' })
+            setState('checking'); setHint('Đang kiểm tra chất lượng và đối chiếu khuôn mặt trên máy chủ…')
+            qualityAttempts++
+            try {
+              // Only selected photos go to the server, never the live video.
+              // Retaking front also compares to the old front so other slots
+              // cannot silently become samples from a different employee.
+              const reference = photosRef.current.front?.file
+              let accepted = false
+              for (let retry = 0; retry <= 2; retry++) {
+                if (!active()) return
+                if (performance.now() > deadline) throw new Error('Kiểm tra ảnh mất quá lâu. Kiểm tra kết nối rồi tiếp tục thu.')
+                try {
+                  const result = await validateEnrollmentPhoto(file, pose, controller.signal, reference)
+                  if (!result.valid || result.pose !== pose || !!reference !== result.reference_checked) throw new Error('Máy chủ chưa xác nhận ảnh. Tải lại trang rồi thử lại.')
+                  accepted = true
+                  break
+                } catch (error) {
+                  const temporary = error instanceof ApiError && [0, 429, 502, 503, 504].includes(error.status)
+                  if (!temporary || retry === 2) throw error
+                  setHint('Máy chủ phản hồi chậm hoặc đang bận. Đang tự thử lại…')
+                  await delay(1000 * (retry + 1), controller.signal)
+                }
+              }
+              if (!active() || !accepted) return
+            } catch (error) {
+              if (!active()) return
+              if (error instanceof ApiError && retryableQuality.has(error.code) && qualityAttempts < 8 && performance.now() < deadline) {
+                setState('capturing'); setProgress(0)
+                setHint(`${error.message} Đang tự chọn lại ảnh…`)
+                best = null; gate = gateForPose()
+                await delay(1000, controller.signal)
+                continue
+              }
+              throw error
+            }
             const old = photosRef.current[pose]
             if (old) URL.revokeObjectURL(old.url)
             photosRef.current = { ...photosRef.current, [pose]: { pose, file, url: URL.createObjectURL(file), orientation: best.orientation } }
-            setPhotos({ ...photosRef.current }); setProgress(100)
+            setPhotos({ ...photosRef.current }); setProgress(100); setState('capturing')
             break
           }
           await delay(Math.max(50, 110 - (performance.now() - started)), controller.signal)
@@ -140,7 +190,7 @@ export function useAutoEnrollment() {
       }
       if (active()) {
         dispose(); setState(POSES.every(pose => photosRef.current[pose.id]) ? 'review' : 'paused')
-        setHint('Đã thu ảnh. Kiểm tra các góc bên dưới trước khi lưu.')
+        setHint('Máy chủ đã kiểm tra các ảnh đã thu. Xem lại các góc bên dưới rồi lưu hồ sơ.')
       }
     } catch (error) {
       if (!active()) return

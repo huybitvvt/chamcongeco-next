@@ -17,6 +17,7 @@ from PIL import Image, UnidentifiedImageError
 
 from .assets import ASSETS, LEGACY_MODEL_ID, MODEL_ID, verify
 from .errors import AppError
+from .quality import check_quality
 from .settings import Settings
 
 logger = logging.getLogger(__name__)
@@ -37,6 +38,7 @@ class Analysis:
     image: np.ndarray
     faces: tuple[Face, ...]
     stages_ms: dict[str, float]
+    quality: dict | None = None
 
     def jpeg(self) -> bytes:
         image = self.image
@@ -268,12 +270,8 @@ class Vision:
                 return Analysis(image, tuple(Face(location(box)) for box, _ in detected), stages)
             box, landmarks = detected[0]
             top, right, bottom, left = location(box)
-            if min(right - left, bottom - top) < self.settings.min_face_pixels:
-                raise AppError("face_too_small", "Hãy đưa khuôn mặt gần camera hơn.")
             roi = image[top:bottom, left:right]
-            sharpness = cv2.Laplacian(cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY), cv2.CV_64F).var()
-            if sharpness < self.settings.min_sharpness:
-                raise AppError("face_blurry", "Ảnh đang mờ. Giữ yên và nhìn thẳng vào camera.")
+            quality = timed("quality", lambda: check_quality(roi, self.settings))
             if liveness:
                 score = timed("pad", lambda: self.liveness_score(image, box))
                 if score < self.settings.liveness_threshold:
@@ -281,7 +279,7 @@ class Vision:
                         "spoof_detected", "Chưa xác minh được khuôn mặt thật. Không dùng ảnh hoặc màn hình.", 403
                     )
             embedding = timed("embedding", lambda: self._embedding(image, box, landmarks))
-            return Analysis(image, (Face((top, right, bottom, left), embedding),), stages)
+            return Analysis(image, (Face((top, right, bottom, left), embedding),), stages, quality)
         finally:
             self._lock.release()
             logger.info("vision_completed | stages_ms=%s", stages)

@@ -12,6 +12,10 @@ services:
       FACE_DATA_DIR: /data
       FACE_ADMIN_API_KEY: ${FACE_ADMIN_API_KEY:?Set a strong admin key in .env}
       FACE_KIOSK_API_KEY: ${FACE_KIOSK_API_KEY:?Set a distinct kiosk key in .env}
+      FACE_MIN_SHARPNESS: ${FACE_MIN_SHARPNESS:-40}
+      FACE_MIN_BRIGHTNESS: ${FACE_MIN_BRIGHTNESS:-45}
+      FACE_MAX_BRIGHTNESS: ${FACE_MAX_BRIGHTNESS:-220}
+      FACE_MIN_FACE_PIXELS: ${FACE_MIN_FACE_PIXELS:-80}
     volumes:
       - runtime-data:/data
       - model-data:/models

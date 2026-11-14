@@ -58,3 +58,26 @@ class PendingRequest(PublicModel):
 class Session(PublicModel):
     role: Literal["admin", "kiosk"]
     authentication_required: bool
+
+
+class QualityPolicy(PublicModel):
+    version: Literal["face-quality-v2"]
+    crop_size: Literal[128]
+    min_sharpness: float
+    min_brightness: float
+    max_brightness: float
+    min_face_pixels: int
+
+
+class ImageQuality(PublicModel):
+    brightness: float
+    sharpness: float
+    face_pixels: int
+    policy_version: Literal["face-quality-v2"]
+
+
+class EnrollmentValidation(PublicModel):
+    valid: Literal[True]
+    pose: Literal["front", "left", "right", "up", "down"]
+    reference_checked: bool
+    quality: ImageQuality | None

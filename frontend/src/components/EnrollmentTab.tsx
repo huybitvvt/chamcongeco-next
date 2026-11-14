@@ -24,7 +24,7 @@ export function EnrollmentTab({ onEnrolled, employee }: Props) {
   const submittingRef = useRef(false)
   const invalidPhotoRef = useRef<File | null>(null)
   const camera = useAutoEnrollment()
-  const cameraBusy = camera.state === 'loading' || camera.state === 'capturing'
+  const cameraBusy = camera.state === 'loading' || camera.state === 'capturing' || camera.state === 'checking'
   const complete = POSES.every(pose => camera.photos[pose.id])
   const success = message?.type === 'success'
 

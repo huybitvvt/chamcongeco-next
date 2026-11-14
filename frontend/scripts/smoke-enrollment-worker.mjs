@@ -2,16 +2,19 @@
 // verifies loading, inference, CSP, cleanup and no silent enrollment.
 import assert from 'node:assert/strict'
 import { chromium } from 'playwright'
+import { readFile } from 'node:fs/promises'
 
 const base=process.env.FRONTEND_URL || 'http://127.0.0.1:5173'
 const browser=await chromium.launch({channel:process.env.PLAYWRIGHT_CHANNEL,args:['--use-fake-device-for-media-stream','--use-fake-ui-for-media-stream',...(process.env.SMOKE_CAMERA_FIXTURE?[`--use-file-for-fake-video-capture=${process.env.SMOKE_CAMERA_FIXTURE}`]:[])]})
 try {
   const page=await browser.newPage({viewport:{width:1440,height:1000}})
   if (process.env.SMOKE_MOCK_API === '1') {
-    // Frontend-only CI has no backend process. Only session/list are stubbed;
+    // Frontend-only CI has no backend. Session/list/policy are stubbed;
     // worker/SDK/WASM/model/camera remain real. Compose runs without these stubs.
     await page.route('**/api/session', route=>route.fulfill({json:{role:'admin',authentication_required:false}}))
     await page.route('**/api/employees', route=>route.fulfill({json:[]}))
+    const fixture=JSON.parse(await readFile(new URL('../../tools/face-quality-fixtures.json',import.meta.url),'utf8'))
+    await page.route('**/api/enrollment/policy',route=>route.fulfill({json:fixture.policy}))
   }
   const errors=[],assets=[],workers=[],remote=[]
   let posts=0

@@ -12,7 +12,7 @@ jobs:
           version: '0.13.8'
           enable-cache: true
       - run: uv sync --project backend --frozen
-      - run: uv run --project backend ruff check backend/src/backend/runtime backend/scripts/download_models.py backend/scripts/import_csv.py backend/scripts/benchmark_runtime.py backend/tests/test_runtime.py backend/tests/test_import.py backend/tests/test_transport.py
+      - run: uv run --project backend ruff check backend/src/backend/runtime backend/scripts/download_models.py backend/scripts/import_csv.py backend/scripts/benchmark_runtime.py backend/scripts/verify_enrollment.py backend/tests/test_runtime.py backend/tests/test_import.py backend/tests/test_transport.py backend/tests/test_quality.py
       - run: uv run --project backend pytest backend/tests -q
       - name: Real ONNX and HTTP/storage smoke with public developer samples
         run: |
@@ -20,6 +20,7 @@ jobs:
           curl --fail --location --retry 2 -o /tmp/live.jpg https://raw.githubusercontent.com/minivision-ai/Silent-Face-Anti-Spoofing/master/images/sample/image_T1.jpg
           curl --fail --location --retry 2 -o /tmp/spoof.jpg https://raw.githubusercontent.com/minivision-ai/Silent-Face-Anti-Spoofing/master/images/sample/image_F1.jpg
           uv run --project backend python backend/scripts/benchmark_runtime.py --image /tmp/live.jpg --spoof /tmp/spoof.jpg --runs 3
+          uv run --project backend python backend/scripts/verify_enrollment.py --image /tmp/live.jpg
   frontend-and-sql:
     runs-on: ubuntu-latest
     steps:
@@ -73,6 +74,13 @@ jobs:
           test "$(curl --silent -o /dev/null -w '%{http_code}' http://127.0.0.1:18080/api/employees)" = 401
           curl --fail --silent -H "Authorization: Bearer $FACE_KIOSK_API_KEY" http://127.0.0.1:18080/api/session
           curl --fail --location --silent -o /tmp/container-face.jpg https://raw.githubusercontent.com/minivision-ai/Silent-Face-Anti-Spoofing/master/images/sample/image_T1.jpg
+          curl --fail --silent -H "Authorization: Bearer $FACE_ADMIN_API_KEY" http://127.0.0.1:18080/api/enrollment/policy > /tmp/container-policy.json
+          test "$(curl --silent -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $FACE_KIOSK_API_KEY" -F 'consent=true' -F 'image=@/tmp/container-face.jpg;type=image/jpeg' http://127.0.0.1:18080/api/enrollment/validate)" = 403
+          curl --fail --silent -H "Authorization: Bearer $FACE_ADMIN_API_KEY" -F 'consent=true' -F 'pose=front' -F 'image=@/tmp/container-face.jpg;type=image/jpeg' http://127.0.0.1:18080/api/enrollment/validate > /tmp/container-front.json
+          curl --fail --silent -H "Authorization: Bearer $FACE_ADMIN_API_KEY" -F 'consent=true' -F 'pose=left' -F 'image=@/tmp/container-face.jpg;type=image/jpeg' -F 'reference=@/tmp/container-face.jpg;type=image/jpeg' http://127.0.0.1:18080/api/enrollment/validate > /tmp/container-side.json
+          curl --fail --silent -H "Authorization: Bearer $FACE_ADMIN_API_KEY" http://127.0.0.1:18080/api/employees > /tmp/container-before-enrollment.json
+          python3 -c "import json; policy=json.load(open('/tmp/container-policy.json')); front=json.load(open('/tmp/container-front.json')); side=json.load(open('/tmp/container-side.json')); assert policy['version']=='face-quality-v2' and policy['crop_size']==128; assert front['valid'] and not front['reference_checked']; assert side['valid'] and side['reference_checked']; assert json.load(open('/tmp/container-before-enrollment.json'))==[]; print('Production preflight/policy/admin role passed without creating profiles')"
+          docker compose exec -T api python -c "from pathlib import Path; assert not list(Path('/data/photos').rglob('*.jpg')); print('Preflight persisted no photos')"
           curl --fail --silent -H "Authorization: Bearer $FACE_ADMIN_API_KEY" -F 'name=Synthetic CI Container' -F 'consent=true' -F 'image=@/tmp/container-face.jpg;type=image/jpeg' http://127.0.0.1:18080/api/employees > /tmp/container-enrollment.json
           REQUEST_ID="$(cat /proc/sys/kernel/random/uuid)"
           curl --fail --silent -H "Authorization: Bearer $FACE_KIOSK_API_KEY" -F "request_id=$REQUEST_ID" -F 'image=@/tmp/container-face.jpg;type=image/jpeg' http://127.0.0.1:18080/api/recognize > /tmp/container-punch.json

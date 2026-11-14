@@ -21,5 +21,19 @@ export interface CapturedPhoto {
   url: string
   orientation: Orientation
 }
-export interface WorkerRequest { type: 'init' | 'frame'; id: number; bitmap?: ImageBitmap; timestamp?: number }
+export interface QualityPolicy {
+  version: 'face-quality-v2'
+  crop_size: 128
+  min_sharpness: number
+  min_brightness: number
+  max_brightness: number
+  min_face_pixels: number
+}
+export interface EnrollmentValidation {
+  valid: true
+  pose: PoseId
+  reference_checked: boolean
+  quality: { brightness: number; sharpness: number; face_pixels: number; policy_version: string } | null
+}
+export interface WorkerRequest { type: 'init' | 'frame'; id: number; bitmap?: ImageBitmap; timestamp?: number; policy?: QualityPolicy }
 export type WorkerReply = { type: 'ready'; id: number } | { type: 'frame'; id: number; frame: FrameAssessment } | { type: 'error'; id: number }

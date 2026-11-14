@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ApiError, getRequestStatus, recognizeFrame } from '../services/api'
 import type { CameraState, RecognitionState, RecognizedFace, RecognitionResponse } from '../types/face'
+import { configureCamera } from '../enrollment/camera'
 
 const INTENT_KEY = 'attendly.pending-punch'
 interface UseCameraRecognitionOptions {
@@ -84,6 +85,9 @@ export function useCameraRecognition({ recognitionEnabled, onAttendanceUpdated }
       })
       if (generation !== generationRef.current) { stream.getTracks().forEach(track => track.stop()); return }
       streamRef.current = stream
+      const track = stream.getVideoTracks()[0]
+      if (track) await configureCamera(track, controller.signal)
+      if (generation !== generationRef.current) return
       if (videoRef.current) {
         videoRef.current.srcObject = stream
         await videoRef.current.play()

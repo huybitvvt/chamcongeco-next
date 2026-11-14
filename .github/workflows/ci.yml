@@ -41,7 +41,7 @@ jobs:
           trap 'kill "$VITE_PID"' EXIT
           for i in $(seq 1 30); do curl --fail --silent http://127.0.0.1:5173 > /dev/null && break; sleep 1; done
           node --test --test-concurrency=1 tests/*.mjs
-          node scripts/smoke-enrollment-worker.mjs
+          SMOKE_MOCK_API=1 node scripts/smoke-enrollment-worker.mjs
       - run: bun install --frozen-lockfile && bun run test:sql
         working-directory: tools
   containers:

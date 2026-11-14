@@ -7,6 +7,12 @@ const base=process.env.FRONTEND_URL || 'http://127.0.0.1:5173'
 const browser=await chromium.launch({channel:process.env.PLAYWRIGHT_CHANNEL,args:['--use-fake-device-for-media-stream','--use-fake-ui-for-media-stream',...(process.env.SMOKE_CAMERA_FIXTURE?[`--use-file-for-fake-video-capture=${process.env.SMOKE_CAMERA_FIXTURE}`]:[])]})
 try {
   const page=await browser.newPage({viewport:{width:1440,height:1000}})
+  if (process.env.SMOKE_MOCK_API === '1') {
+    // Frontend-only CI has no backend process. Only session/list are stubbed;
+    // worker/SDK/WASM/model/camera remain real. Compose runs without these stubs.
+    await page.route('**/api/session', route=>route.fulfill({json:{role:'admin',authentication_required:false}}))
+    await page.route('**/api/employees', route=>route.fulfill({json:[]}))
+  }
   const errors=[],assets=[],workers=[],remote=[]
   let posts=0
   page.on('pageerror',error=>errors.push(error.message))

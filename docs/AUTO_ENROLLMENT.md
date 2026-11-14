@@ -52,4 +52,6 @@ Unit test kiểm tra pose toán học, chất lượng và điều kiện giữ 
 
 CI kiểm tra cả Vite và image production/Nginx với CSP thật. Các kiểm tra này không thay thế thử 5 góc bằng webcam vật lý, Safari/iOS, ánh sáng/kính và người thật.
 
+Job frontend dùng `SMOKE_MOCK_API=1` cho smoke worker: chỉ thay API session/danh sách vì job này không khởi động backend; SDK/WASM/model vẫn thật. Job Compose chạy smoke với backend thật và không bật biến này.
+
 **Thu đủ góc không chứng minh người thật hoặc chống replay.** Endpoint đăng ký vẫn hỗ trợ ảnh quản trị tải lên và dùng kiểm tra chất lượng/danh tính; không tuyên bố có enrollment liveness. MiniFASNet tiếp tục bảo vệ luồng chấm công theo giới hạn đã ghi trong `VERIFICATION.md`.

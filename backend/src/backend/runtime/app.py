@@ -203,9 +203,8 @@ def create_app(settings: Settings | None = None, *, vision=None, store=None, pho
             if len(raw) > 256:
                 raise ValueError("too many poses")
             value = json.loads(raw) if raw else None
-            if (
-                value is not None
-                and (not isinstance(value, list) or len(value) > 5 or any(not isinstance(item, str) for item in value))
+            if value is not None and (
+                not isinstance(value, list) or len(value) > 5 or any(not isinstance(item, str) for item in value)
             ):
                 raise ValueError("invalid poses")
             return value

@@ -100,7 +100,7 @@ export function CameraView({
         className={`camera-frame${recognitionState === 'spoof-detected' ? ' spoof-detected' : ''}`}
         style={{ aspectRatio: `${frameSize.width} / ${frameSize.height}` }}
       >
-        <video ref={videoRef} muted playsInline aria-label="Camera chấm công trực tiếp" />
+        <video ref={videoRef} muted playsInline aria-label="Camera chấm công trực tiếp" className="mirrored-preview" />
         {cameraState !== 'active' ? (
           <div className="camera-placeholder">
             <div>
@@ -119,7 +119,8 @@ export function CameraView({
           <div className="detection-layer" aria-hidden="true">
             {faces.map((face, index) => {
               const top = (face.location.top / frameSize.height) * 100
-              const left = (face.location.left / frameSize.width) * 100
+              // Mirror the overlay with the preview; keep captured frames unchanged.
+              const left = ((frameSize.width - face.location.right) / frameSize.width) * 100
               const width =
                 ((face.location.right - face.location.left) / frameSize.width) * 100
               const height =
@@ -130,7 +131,7 @@ export function CameraView({
                   key={`${face.location.left}-${face.location.top}-${index}`}
                   style={{ top: `${top}%`, left: `${left}%`, width: `${width}%`, height: `${height}%` }}
                 >
-                  <span className="face-label">
+                  <span className="face-label" style={left + width / 2 > 50 ? { left: 'auto', right: '-2px' } : undefined}>
                     {face.employee_id ? face.name : 'Chưa nhận diện'}
                   </span>
                 </div>

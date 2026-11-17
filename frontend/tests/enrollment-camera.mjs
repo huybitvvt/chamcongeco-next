@@ -66,6 +66,7 @@ test('multiple faces and blurry frames never produce samples; switching screens 
     await page.getByRole('button',{name:'Bắt đầu thu 5 góc',exact:true}).click()
     await page.getByText('Ảnh đang mờ. Giữ yên và kiểm tra ống kính camera.',{exact:true}).waitFor()
     assert.equal(await page.locator('.pose-card img').count(),0)
+    await page.keyboard.press('Escape')
     await page.getByRole('button',{name:'Chấm công',exact:true}).click()
     assert.equal(await page.evaluate(()=>window.cameraStreams.every(s=>s.getTracks().every(t=>t.readyState==='ended'))),true)
     assert.equal(await page.evaluate(()=>window.trackerCount===window.trackerTerminated),true)

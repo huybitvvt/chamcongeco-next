@@ -78,6 +78,11 @@ fonts.$font-families: map.set(fonts.$font-families, 'sans', ('Inter', 'Segoe UI'
 .capture-count, .capture-note, .pose-card > span { @include type.type-style('label-01'); }
 .pose-card strong { @include type.type-style('label-01'); font-weight: 600; }
 .pose-number { @include type.type-style('heading-03'); }
+.capture-session-header h3 { @include type.type-style('heading-compact-02'); font-weight: 600; }
+.capture-direction strong { @include type.type-style('heading-03'); font-weight: 600; }
+.capture-steps { @include type.type-style('label-01'); }
+.capture-complete { @include type.type-style('body-01'); }
+.capture-complete strong { @include type.type-style('heading-compact-01'); font-weight: 600; }
 
 .camera-status strong, .camera-placeholder strong,
 .employee-name, .attendance-confirmation-copy strong, .message-action, .upload-copy strong {

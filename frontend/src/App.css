@@ -146,8 +146,8 @@
 .mirrored-preview { transform: scaleX(-1); }
 .enrollment-guide { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; }
 .enrollment-guide > span { width: 50%; height: 76%; border: 2px dashed #b9e3ca; border-radius: 48%; box-shadow: 0 0 0 50rem #0003; }
-.capture-instruction { margin-top: 1rem; min-height: 6rem; color: var(--ink); }
-.capture-hint { margin: .5rem 0; color: var(--muted); }
+.capture-instruction { padding: var(--cds-spacing-05); color: var(--ink, #262626); background: var(--cds-layer, #fff); }
+.capture-hint { margin: 0 0 var(--cds-spacing-05); color: var(--muted); }
 .capture-hold { height: .375rem; background: #dce7df; overflow: hidden; }
 .capture-hold > span { display: block; height: 100%; background: var(--accent); }
 .pose-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: .5rem; padding: 0; margin: 1rem 0; list-style: none; }
@@ -168,3 +168,40 @@
 .upload-zone:focus-within { outline: 2px solid var(--cds-focus); outline-offset: 2px; }
 @media (max-width: 671px) { .pose-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } .capture-method > button { flex: 1; } }
 @media (prefers-reduced-motion: reduce) { .capture-hold > span { transition: none; } }
+
+.auto-capture > [hidden] { display: none; }
+.capture-dialog .capture-dialog-container { display: flex; flex-direction: column; width: min(48rem, calc(100% - 4rem)); height: min(52rem, calc(100vh - 4rem)); height: min(52rem, calc(100dvh - 4rem)); max-height: none; overflow: hidden; background: var(--cds-layer, #fff); }
+.capture-dialog .cds--modal-container-body { display: flex; flex-direction: column; min-height: 0; height: 100%; }
+.capture-session-header { display: flex; align-items: center; justify-content: space-between; gap: var(--cds-spacing-05); padding: var(--cds-spacing-05) var(--cds-spacing-06); flex-shrink: 0; }
+.capture-session-header h3 { margin: 0; }
+.capture-session-header .capture-count { display: block; margin-top: .25rem; color: var(--muted); }
+.capture-stop { flex-shrink: 0; }
+.capture-dialog .capture-session-body { display: flex; flex: 1; flex-direction: column; gap: var(--cds-spacing-05); padding: 0 var(--cds-spacing-06) var(--cds-spacing-06); margin: 0; min-height: 0; overflow: hidden; }
+.capture-stage { display: flex; flex: 1; flex-direction: column; min-height: 0; background: #242424; }
+.capture-direction { display: flex; align-items: center; gap: var(--cds-spacing-05); padding: var(--cds-spacing-05); flex-shrink: 0; background: var(--cds-layer, #fff); }
+.capture-direction > svg { flex-shrink: 0; color: var(--accent); }
+.capture-direction strong { min-width: 0; }
+.capture-video-area { display: flex; flex: 1; align-items: center; justify-content: center; min-height: 0; overflow: hidden; container-type: size; }
+.capture-video-area .enrollment-camera { flex: none; width: 100%; max-width: 100%; max-height: 100%; }
+@supports (width: 1cqw) { .capture-video-area .enrollment-camera { width: min(100cqw, calc(100cqh * var(--capture-aspect))); } }
+.capture-stage .capture-instruction { flex-shrink: 0; }
+.capture-stage.holding .enrollment-guide > span { border-style: solid; border-color: #7be0a1; }
+.capture-steps { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); flex-shrink: 0; gap: .25rem; padding: 0; margin: 0; list-style: none; }
+.capture-steps li { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .25rem; min-width: 0; padding: .25rem; text-align: center; color: var(--muted); }
+.capture-steps li[aria-current=step] { background: var(--accent-soft); color: var(--ink); }
+.capture-step-number { display: grid; place-items: center; min-height: 1.5rem; }
+.capture-steps .complete .capture-step-number { color: var(--cds-support-success, var(--accent)); }
+.capture-complete { display: flex; align-items: flex-start; gap: var(--cds-spacing-05); padding: var(--cds-spacing-05); color: var(--accent-hover); background: var(--accent-soft); }
+.capture-complete > svg { flex-shrink: 0; }
+.capture-complete p { margin: .5rem 0 0; color: var(--muted); }
+@media (max-width: 671px) {
+  .capture-dialog .capture-dialog-container { width: 100%; height: 100vh; height: 100dvh; max-height: none; }
+  .capture-session-header { padding: max(var(--cds-spacing-05), env(safe-area-inset-top)) max(var(--cds-spacing-05), env(safe-area-inset-right)) var(--cds-spacing-05) max(var(--cds-spacing-05), env(safe-area-inset-left)); }
+  .capture-dialog .capture-session-body { padding: 0 max(var(--cds-spacing-05), env(safe-area-inset-right)) max(var(--cds-spacing-05), env(safe-area-inset-bottom)) max(var(--cds-spacing-05), env(safe-area-inset-left)); }
+}
+@media (max-height: 500px) and (min-width: 600px) {
+  .capture-dialog .capture-dialog-container { width: 100%; height: 100vh; height: 100dvh; }
+  .capture-stage { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+  .capture-video-area { grid-column: 1; grid-row: 1 / 3; }
+  .capture-direction, .capture-stage .capture-instruction { grid-column: 2; }
+}
